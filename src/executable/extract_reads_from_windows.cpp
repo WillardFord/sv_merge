@@ -66,6 +66,7 @@ void extract(
     // Add flanks, place the regions in the interval tree, and log the windows
     for (auto& r: regions) {
         r.start -= flank_length;
+        if (r.start < 0) r.start = 0;
         r.stop += flank_length;
 
         contig_interval_trees[r.name].insert({r.start, r.stop});

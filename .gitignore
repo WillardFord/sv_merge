@@ -37,3 +37,9 @@ cmake-build-debug/*
 external/*
 output/*
 *.png
+
+
+scripts/read_filtering/__pycache__
+scripts/read_filtering/plots
+data/windows_per_sample_per_chrom_flank_0
+.vscode
