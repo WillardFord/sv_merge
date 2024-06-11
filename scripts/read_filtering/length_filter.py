@@ -23,7 +23,8 @@ class lengthFilter(Filter):
         return 1
 
 def main():
-    lengthThreshold = 2
+    # Add this as input
+    lengthThreshold = 6
     filter:lengthFilter = lengthFilter(lengthThreshold)
     testFilter(filter)
 

@@ -1,12 +1,9 @@
 """
 Testing File for read filtering methods.
-
 """
-from collections import defaultdict
 import matplotlib.pyplot as plt
 import numpy as np
 from os.path import join
-
 from abc import ABC, abstractmethod
 
 """
@@ -15,22 +12,30 @@ Generic Abstract Class for filtering methods.
 class Filter(ABC):
     '''
     seqs: length n list of sequences
-    classes: n by n matrix indicating if two sequences are sufficiently similar
+    labels: length n list of corresponding sequence labels
+    adjacencyMatrix: n by n matrix indicating if two sequences are sufficiently similar
+    self.n
+    self.firstOcc: First occurrence of each label in labels. Used during plotting and calculating metrics.
     '''
     def __init__(self, seqs, labels):
-        self.seqs:list[str] = seqs
-        self.labels :list[int] = labels
-        self.n :int = len(seqs)
-        self.adjacencyMatrix: list[list[int]] = [[0] * self.n]*self.n
+        self.fill(seqs, labels)
 
+    '''
+    Load all class fields
+    '''
     def fill(self, seqs, labels):
         try:
-            print(self.seqs)
+            print("Seqs already exists:", self.seqs)
         except:
             self.seqs = seqs
             self.labels = labels
             self.n :int = len(seqs)
-            self.adjacencyMatrix: list[list[int]] = [[0] * self.n]*self.n
+            self.adjacencyMatrix: list[list[int]] = [[0 for _ in range(self.n)] for _ in range(self.n)]
+            labelSet = set(self.labels)
+            self.firstOcc = [0 for _ in range(len(labelSet))]
+            for i, item in enumerate(sorted(labelSet)):
+                self.firstOcc[i] = self.labels.index(item)
+
     '''
     Fill out classes based on class filtering method
     '''
@@ -52,54 +57,46 @@ class Filter(ABC):
     '''
     Plot adjacencyMatrix
     '''
-    def plotAdjacencyMatrix(self, filterName, seqsName, outDir = "plots"):
-        print(self.adjacencyMatrix)
-
-        colors = plt.cm.tab10.colors[:len(np.unique(self.labels))]
-        cmap = plt.cm.colors.ListedColormap(colors)
-
-        plt.imshow(self.adjacencyMatrix, cmap=cmap)
+    def plotAdjacencyMatrix(self, filterName, seqsName, outDir = "../../output/plots"):
+        plt.imshow(self.adjacencyMatrix, cmap = 'binary_r', interpolation='nearest')
         plt.title(f"Adjacency Matrix, {filterName} on {seqsName}")
-        #plt.axis('off')
+        plt.xticks(np.arange(self.n), np.arange(1, self.n + 1))
+        plt.yticks(np.arange(self.n), np.arange(1, self.n + 1))
+
+        plt.tick_params(axis='x', top=True, bottom=False, labeltop=True, labelbottom=False)
+        plt.xlabel(f"White in pos i,j indicates i connects j under {filterName}")
+        for x in self.firstOcc[1:]:
+            plt.axhline(x - 0.5, color='red', linestyle='-', linewidth=2)
+            plt.axvline(x - 0.5, color='red', linestyle='-', linewidth=2)
 
         saveLocation = join(outDir, f"{filterName}_{seqsName}.jpg")
         plt.savefig(saveLocation) 
-        plt.show()
-        
 
     '''
     Return tuple (true positive rate, false positive rate)
-    Note: If 1 group is split into 2 clusters, whichever cluster appears first 
-        will count as tpr and the rest will be counted in fpr
-    This should change. TODO
+    tpr - sum of all connections in the clusters where connections should exist over that total space
+    fpr - equivalently for connections that shouldn't exist
     '''
     def tpr_fpr(self):
-        tpc = 0
-        fpc = 0
-        classes = defaultdict(list)
-        for i, row in enumerate(self.adjacencyMatrix):
-            classes[tuple(row)].append(i) # This only works if the connection is mutual, i.e. x~y -> y~x
-        clusterLabels = [-1]*self.n
-        for i, cluster in enumerate(classes.values()):
-            for j, item in enumerate(cluster):
-                if j == 0 and clusterLabels[self.labels[item]] == -1:
-                    clusterLabels[self.labels[item]] = i
-                if clusterLabels[self.labels[item]] == i:
-                    tpc += 1
-                else:
-                    fpc += 1
-        return tpc/self.n , fpc/self.n
+        trueMask = np.zeros((self.n, self.n), dtype = bool)
+        for i in range(0, len(self.firstOcc)-1):
+            trueMask[self.firstOcc[i]:self.firstOcc[i+1], self.firstOcc[i]:self.firstOcc[i+1]] = 1
+        # Add Last Region
+        trueMask[self.firstOcc[-1]:, self.firstOcc[-1]:] = 1
+
+        tpr = (np.sum(self.adjacencyMatrix, where = trueMask) - self.n) / (np.sum(trueMask) - self.n) # Don't include y=x line.
+        fpr = np.sum(self.adjacencyMatrix, where = ~trueMask) / np.sum(~trueMask)
+
+        return tpr, fpr
 
 '''
 Filter Testing method that prints out a heatmap Adjecency Matrix and 
 '''
 def testFilter(filter : Filter):
     # Load ground truth set of sequences and haplotypes
-    # Seqs and labels should be ordered by labels
+    # Seqs and labels should be ordered by labels for nice plotting and accurate metric counting.
     seqs, labels = readInSeqs()
-
     seqs, labels = zip(*sorted(zip(seqs, labels), key = lambda x : x[1]))
-
     seqsName = "chr10_756193-756593"
 
     filter.fill(seqs, labels)
@@ -107,16 +104,13 @@ def testFilter(filter : Filter):
     # Filter sequence set
     filter.buildAdjacencyMatrix()
 
-    filterName = filter.__class__.__name__
-
     # Test filtered sequence set and haplotypes
-    #scores = filter.tpr_fpr()
-    # TODO add outDir for saving files somewhere, needed during testing.
+    filterName = filter.__class__.__name__
     filter.plotAdjacencyMatrix(filterName, seqsName)
-    print("yay")
-    # Return a set of metrics
-    #print(scores)
 
+    # Return a set of metrics
+    scores = filter.tpr_fpr()
+    print(scores)
 
 def readInSeqs(seqPath:str = None):
     if seqPath == None:
@@ -141,7 +135,7 @@ def readInSeqs(seqPath:str = None):
     return seqs, labels
 
 def main():
-    print("\nWhat are you doing here?\n\nThis is a resources file called by other filtering files.")
+    print("\nWhat are you doing here?\n\nThis is a resources file called by other filters.")
 
 if __name__ == "__main__":
     main()
