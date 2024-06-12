@@ -26,7 +26,7 @@ class hashFilter(Filter):
     def preprocessReads(self):
         # TODO, this should be min length of all seqs. 
         # Can be estimated by length of first minus threshold from length filter
-        n = len(self.seqs[0])
+        n = int(len(self.seqs[0])//2)
         freq = int(n * self.percentHashed // 100) # Lower Bound
         if freq < 1:
             print("Percent too low, using 1 base.")

@@ -1,7 +1,7 @@
 '''
 Given filter file name, finetune the parameter over all regions and all samples
 
-
+python finetuneFilterParams.py hashFilter.py 1 20
 
 TODO Future steps should consider that different regions have different properties --> Only optimize over certain labeled regions
     i.e. highly repetitive regions, [types of structural variants] ask Fabio and Ryan for a competant list.
@@ -44,7 +44,8 @@ def optimizeParam(file, start_param, end_param, n = 20):
 
 def getTPR_FPR(file, param):
     workingDir = "/Users/wford/Documents/sv_merge/scripts/readFiltering"
-    command = ["python", join(workingDir, file), "--param", str(param), "--plot", "False"]
+    script = join(workingDir, file)
+    command = ["python", script, "--param", str(param), "--plot", "False"]
     tpr_fpr = subprocess.run(command, 
                              capture_output = True, text = True)
     tpr, fpr = tpr_fpr.stdout.strip().split("\t")
@@ -70,7 +71,7 @@ def plotTPRbyFPR(tprs, fprs, params, filterType, outDir = "../../output/plots"):
 
     plt.xlabel('False Positive Rate')
     plt.ylabel('True Positive Rate')
-    plt.title('TPR vs FPR')
+    plt.title(f'TPR vs FPR of {filterType}')
     plt.colorbar(label='Parameter')
     plt.legend()
 
