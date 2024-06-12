@@ -1,5 +1,11 @@
-from test_filter import Filter, testFilter
-from abc import ABC
+"""
+Runnable File containing a lengthFilter class:
+
+python lengthFilter.py [thresh]
+"""
+from test_filters import Filter, testFilter, readInputs
+import sys
+
 
 class lengthFilter(Filter):
     '''
@@ -13,9 +19,16 @@ class lengthFilter(Filter):
 
     def __init__(self, threshold):
         self.threshold = threshold
+        self.title = f"lengthFilter_threshold_{threshold}"
 
     '''
-    Fill out classes based on size difference.
+    Preprocess all reads, required for some filters
+    '''
+    def preprocessReads(self):
+        pass
+
+    '''
+    Connect elements with dif(lengths) <= self.threshold.
     '''
     def connect(self, i, j):
         if abs(len(self.seqs[i]) - len(self.seqs[j])) > self.threshold:
@@ -23,10 +36,9 @@ class lengthFilter(Filter):
         return 1
 
 def main():
-    # Add this as input
-    lengthThreshold = 6
+    saveFig, lengthThreshold = readInputs()
     filter:lengthFilter = lengthFilter(lengthThreshold)
-    testFilter(filter)
+    testFilter(filter, saveFig = saveFig)
 
 if __name__ == "__main__":
     main()
