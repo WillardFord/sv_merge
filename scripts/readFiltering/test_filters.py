@@ -4,6 +4,7 @@ Testing File for read filtering methods.
 import matplotlib.pyplot as plt
 import numpy as np
 from os.path import join
+import os
 from abc import ABC, abstractmethod
 import sys
 
@@ -26,7 +27,7 @@ class Filter(ABC):
         self.seqs = seqs
         self.labels = labels
         self.n :int = len(seqs)
-        self.adjacencyMatrix: list[list[int]] = [[0 for _ in range(self.n)] for _ in range(self.n)]
+        self.adjacencyMatrix: list[list[bool]] = [[0 for _ in range(self.n)] for _ in range(self.n)]
         labelSet = set(self.labels)
         self.firstOcc = [0 for _ in range(len(labelSet))]
         for i, item in enumerate(sorted(labelSet)):
@@ -57,7 +58,7 @@ class Filter(ABC):
         for i in range(self.n):
             for j in range(self.n):
                 if i == j:
-                    self.adjacencyMatrix[i][j] = 1
+                    self.adjacencyMatrix[i][j] = True
                     continue
                 self.adjacencyMatrix[i][j] = self.connect(i,j)
 
@@ -67,7 +68,11 @@ class Filter(ABC):
     TODO: Add tpr_fpr labels in key??
     '''
     def plotAdjacencyMatrix(self, outDir = "../../output/plots"):
-        plt.imshow(self.adjacencyMatrix, cmap = 'binary_r', interpolation='nearest')
+        plt.imshow(self.adjacencyMatrix, 
+                   cmap = 'binary_r', 
+                   interpolation='nearest', 
+                   vmin=0, vmax=1
+        )
         plt.title(f"Adjacency Matrix, {self.title}")
         plt.xticks(np.arange(self.n), np.arange(1, self.n + 1))
         plt.yticks(np.arange(self.n), np.arange(1, self.n + 1))
@@ -79,7 +84,8 @@ class Filter(ABC):
             plt.axvline(x - 0.5, color='red', linestyle='-', linewidth=2)
 
         saveLocation = join(outDir, f"{self.title}.jpg")
-        plt.savefig(saveLocation) 
+        print(f"Saving at {saveLocation}", file = sys.stderr)
+        plt.savefig(saveLocation)
 
     '''
     Return tuple (true positive rate, false positive rate)
@@ -102,14 +108,16 @@ class Filter(ABC):
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix and 
 '''
-def testFilter(filter : Filter, saveFig = False):
-    # Load ground truth set of sequences and haplotypes
-    # Randomly chosen region: output/chr1/HG002/chr1_676787-678886.fastq
-
-    region = ["chr1", 676787, 678886]
-    seqs, labels = loadSamplesSeqs(region)
+def testFilter(filter : Filter, saveFig, test):
+    seqs, labels = readFastq()
     filter.fill(seqs, labels)
+    tpr, fpr = runLoadedFilter(filter, saveFig)
+    print(f"{tpr}\t{fpr}")
 
+"""
+Get Results from loaded filter
+"""
+def runLoadedFilter(filter, saveFig):
     # Filter sequence set
     filter.preprocessReads()
     filter.buildAdjacencyMatrix()
@@ -119,23 +127,78 @@ def testFilter(filter : Filter, saveFig = False):
         filter.plotAdjacencyMatrix()
 
     # Return a set of metrics
-    tpr, fpr = filter.tpr_fpr()
-    print(f"{tpr}\t{fpr}")
+    return filter.tpr_fpr()
+
+"""
+General Callable Function to handle average results and test runs.
+"""
+def runFilter(filter : Filter, saveFig, test):
+    if test:
+        return testFilter(saveFig)
+    
+    runAllSamples(filter, saveFig)
+
+"""
+Load filter on all samples
+"""
+def runAllSamples(filter, saveFig):
+    samplePath = "../../output/"
+    TruePos, TotPos, FalsePos, TotNeg = 0, 0, 0, 0
+    for directory in [x for x in os.listdir(samplePath) if x.startswith("HG")]:
+        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, saveFig, join(samplePath, directory))
+        TruePos += sampleTruePos
+        TotPos += sampleTotPos
+        FalsePos += sampleFalsePos
+        TotNeg += sampleTotNeg
+
+    print(f"{TruePos}:{TotPos}\t{FalsePos}:{TotNeg}")
+
+
+
+"""
+Test filter on all regions for a single sample and return the total number of false positives, 
+    maximum possible, and equivalent for num false negatives
+
+    minSeqsThresh is the minimum required number of phased sequences for us to use the region.
+    Arbitrarily set to 10.
+"""
+def runAllRegions(filter, saveFig, directory):
+    minSeqsThresh = 10
+    sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
+    for chrom in os.listdir(directory):
+        for fastqFile in os.listdir(join(directory, chrom)):
+            seqs, labels = readFastq(join(directory, chrom, fastqFile))
+            if len(seqs) < minSeqsThresh:
+                continue
+            filter.fill(seqs, labels)
+            tpr, fpr = runLoadedFilter(filter, saveFig)
+
+            truePos, regionTotPos = tpr.split(":")
+            falsePos, regionTotNeg = fpr.split(":")
+
+            sampleTruePos += int(truePos)
+            sampleTotPos += int(regionTotPos)
+            sampleFalsePos += int(falsePos)
+            sampleTotNeg += int(regionTotNeg)
+
+    return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
+
+
+
 
 def loadSamplesSeqs(region:str):
     chrom, start, end = region
     seqs = []
     labels = []
-    samples = ["HG002", "HG00733"]
-    dataDir = join("../../output", chrom)
-    for sample in samples:
-        fastqFile = join(dataDir, sample, f"{chrom}_{start}-{end}.fastq")
-        sampleSeqs, sampleLabels = readFastq(fastqFile)
-        sampleLabels = (np.array(sampleLabels, dtype = np.uint) + len(set(labels))).tolist() # Different samples have different haplotypes.
-        seqs += sampleSeqs
-        labels += sampleLabels
+
+    sampleSeqs, sampleLabels = readFastq()
+    seqs += sampleSeqs
+    labels += sampleLabels
     return seqs, labels
 
+"""
+Read in reads and labels form a phased fastq file
+"""
 def readFastq(fastqFile:str = None):
     if fastqFile == None:
         fastqFile = "/Users/wford/Documents/sv_merge/output/test_extract/chr10_756193-756593.fastq"
@@ -144,29 +207,38 @@ def readFastq(fastqFile:str = None):
     labels :list[str] = []
     with open(fastqFile,"r") as f:
         i = 0
-        curHap = -1
-        curSeq = ""
         for line in f.readlines():
-            if i % 4 == 0:
+            if i % 4 == 2:
+                curHap = -1
+                curSeq = ""
+            elif i % 4 == 0:
                 for segment in line.strip().split(" "):
                     if segment.startswith("HP"):
                         curHap = segment.split(":")[-1]
             elif i % 4 == 1:
+                if curHap == -1:
+                    continue
                 curSeq = line.strip()
                 seqs.append(curSeq)
                 labels.append(curHap)
             i += 1
     return seqs, labels
 
+"""
+Read in parameters for loading a filter
+"""
 def readInputs():
     saveFig = False
     param = 10
+    test = False
     for i, item in enumerate(sys.argv):
         if item == "--param":
-            param = int(sys.argv[i+1])
+            param = sys.argv[i+1]
         elif item == "--plot":
-            saveFig = bool(sys.argv[i+1])
-    return saveFig, param
+            saveFig = True
+        elif item == "--test":
+            test = True
+    return saveFig, param, test
 
 def main():
     print("\nWhat are you doing here?\n\nThis is a resources file called by other filters.")

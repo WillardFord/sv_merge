@@ -4,10 +4,9 @@ Runnable File containing a hashFilter class:
 python hashFilter.py [thresh]
 """
 
-from test_filters import Filter, testFilter, readInputs
+from test_filters import Filter, runFilter, readInputs
 from collections import defaultdict 
 import numpy as np
-import sys
 
 class hashFilter(Filter):
     '''
@@ -60,9 +59,9 @@ class hashFilter(Filter):
         return self.newLabels[i] == self.newLabels[j]
 
 def main():
-    saveFig, percentHashed = readInputs()
-    filter:hashFilter = hashFilter(percentHashed)
-    testFilter(filter, saveFig = saveFig)
+    saveFig, percentHashed, test = readInputs()
+    filter:hashFilter = hashFilter(float(percentHashed))
+    runFilter(filter, saveFig, test)
 
 if __name__ == "__main__":
     main()

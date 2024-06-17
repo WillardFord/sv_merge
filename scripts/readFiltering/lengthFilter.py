@@ -3,7 +3,7 @@ Runnable File containing a lengthFilter class:
 
 python lengthFilter.py [thresh]
 """
-from test_filters import Filter, testFilter, readInputs
+from test_filters import Filter, runFilter, readInputs
 import sys
 
 
@@ -17,9 +17,9 @@ class lengthFilter(Filter):
         self.threshold = threshold
         super().__init__(seqs, labels)
 
-    def __init__(self, threshold):
-        self.threshold = threshold
-        self.title = f"lengthFilter_threshold_{threshold}"
+    def __init__(self, param):
+        self.threshold = int(param)
+        self.title = f"lengthFilter_threshold_{self.threshold}"
 
     '''
     Preprocess all reads, required for some filters
@@ -36,9 +36,9 @@ class lengthFilter(Filter):
         return 1
 
 def main():
-    saveFig, lengthThreshold = readInputs()
-    filter:lengthFilter = lengthFilter(lengthThreshold)
-    testFilter(filter, saveFig = saveFig)
+    saveFig, param, test = readInputs()
+    filter:lengthFilter = lengthFilter(param)
+    runFilter(filter, saveFig, test)
 
 if __name__ == "__main__":
     main()
