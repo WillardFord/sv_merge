@@ -26,7 +26,7 @@ class hashFilter(Filter):
     def preprocessReads(self):
         # TODO, this should be min length of all seqs. 
         # Can be estimated by length of first minus threshold from length filter
-        n = int(len(self.seqs[0])//2)
+        n = self.getMinLength()
         freq = int(n * self.percentHashed // 100) # Lower Bound
         if freq < 1:
             print("Percent too low, using 1 base.")
@@ -45,6 +45,13 @@ class hashFilter(Filter):
             return new_dictionary
         
         self.newLabels = swap_keys_values(self.buckets)
+
+    def getMinLength(self):
+        n = 9999999
+        for seq in self.seqs:
+            if len(seq) < n:
+                n = len(seq)
+        return n
 
     '''
     Connect elements in the same bucket.

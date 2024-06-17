@@ -6,7 +6,7 @@ for sample in HG002 HG00733
 do
     for i in $(seq 1 23);
     do
-        OUTPUTDIR="../output/chr"$i"/"$sample""
+        OUTPUTDIR="../output/$sample/chr$i"
         BED="$BED_DIR"chr"$i".bed""
         BAM="gs://fc-28761d6c-5677-4941-86e7-6e42b59a27f4/willard/"$sample"/"$sample"_haplotagged.bam "
         echo $BAM

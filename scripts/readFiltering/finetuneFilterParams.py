@@ -24,7 +24,6 @@ def main():
 
     plotTPRbyFPR(tprs, fprs, params, filterType)
 
-
 def loadArguments():
     file = sys.argv[1]
     start_param = sys.argv[2]
@@ -47,7 +46,8 @@ def getTPR_FPR(file, param):
     script = join(workingDir, file)
     command = ["python", script, "--param", str(param), "--plot", "False"]
     tpr_fpr = subprocess.run(command, 
-                             capture_output = True, text = True)
+                            capture_output = True, 
+                            text = True)
     tpr, fpr = tpr_fpr.stdout.strip().split("\t")
     return float(tpr), float(fpr)
 

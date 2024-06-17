@@ -93,8 +93,9 @@ class Filter(ABC):
         # Add Last Region
         trueMask[self.firstOcc[-1]:, self.firstOcc[-1]:] = 1
 
-        tpr = (np.sum(self.adjacencyMatrix, where = trueMask) - self.n) / (np.sum(trueMask) - self.n) # Don't include y=x line.
-        fpr = np.sum(self.adjacencyMatrix, where = ~trueMask) / np.sum(~trueMask)
+        # Don't include y=x line.
+        tpr = f"{int((np.sum(self.adjacencyMatrix, where = trueMask) - self.n)/2)}:{int((np.sum(trueMask) - self.n)/2)}"
+        fpr = f"{int(np.sum(self.adjacencyMatrix, where = ~trueMask)/2)}:{int(np.sum(~trueMask)/2)}"
 
         return tpr, fpr
 
