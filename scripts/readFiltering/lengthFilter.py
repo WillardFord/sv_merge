@@ -1,7 +1,7 @@
 """
 Runnable File containing a lengthFilter class:
 
-python lengthFilter.py [thresh]
+python lengthFilter.py --param 10
 """
 from test_filters import Filter, runFilter, readInputs
 import sys

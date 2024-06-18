@@ -48,23 +48,8 @@ class minHashFilter(Filter):
     3. Bin using band method
     '''
     def preprocessReads(self):
-        self.buildCharacteristicMatrix()
         self.minHashSignature()
         self.band()
-
-    """
-    Generate Matrix of kmers x seqs 
-        -- In practice this matrix is too large to store in memory. But it's unclear how to operate instead.
-        -- Binary values indicating presence or not
-
-        TODO: Test whether or not specific subsets of kmers efficiently provide sufficient information for identity
-    """
-    def buildCharacteristicMatrix(self):
-        kmers  = self.getKmers()
-        self.characteristicMatrix = np.zeros((self.m, self.n), np.bool_)
-        for i, seq in enumerate(self.seqs):
-            for j, kmer in enumerate(kmers):
-                self.characteristicMatrix[j,i] = kmer in seq
 
     """
     Generate signatureMatrix of hashs x seqs
@@ -73,12 +58,14 @@ class minHashFilter(Filter):
     def minHashSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
         rng = np.random.default_rng()
+        kmers = self.fracMinHashKmers()
         hashes = [rng.permutation(self.m) for _ in range(self.numHashes)]
-        for j in range(self.m): # iterate kmers
+        for j, kmer in enumerate(kmers): # iterate kmers
             for i in range(self.n): # iterate strings
-                if self.characteristicMatrix[j,i] > 0:
+                if kmer in self.seqs[i]: # Characteristic Matrix Value
                     for k, perm in enumerate(hashes):
                         self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[j])
+
 
     """
     Use banding technique to bin reads by similarity
@@ -89,38 +76,30 @@ class minHashFilter(Filter):
         -- t ~= (1/b)^(1/r)
     """
     def band(self, threshold = 0.85):
-        def swap_keys_values(dictionary):
-            new_dictionary = {}
-            for key, values in dictionary.items():
-                for value in values:
-                    new_dictionary[value] = key
-            return new_dictionary
-        def get_numBands_bandLength(threshold):
-            numBands = min(50, self.numHashes) 
-            bandLength = self.numHashes // numBands
-            print(numBands, bandLength)
-            print(f"Threshold {np.power(1/numBands, 1/bandLength)}")
-            return numBands, bandLength
+        def connectBucket(bucket):
+            for i in range(len(bucket)-1):
+                for j in range(i+1, len(bucket)):
+                    self.adjacencyMatrix[bucket[i],bucket[j]] = True
+                    self.adjacencyMatrix[bucket[j],bucket[i]] = True
 
-        # TODO: Automate how b, r are chosen. 
-        # These values give about the desired threshold 
-        numBands, bandLength = get_numBands_bandLength(threshold)
-        numBands = 40
-        bandLength = 25
-        self.bucketsSet = [defaultdict(list[int]) for _ in range(numBands)]
+        numBands, bandLength = self.getNumBands(threshold)
         for i in range(numBands):
+            buckets = defaultdict(list[int])
             for j in range(self.n):
-                self.bucketsSet[i][self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
-            self.bucketsSet[i] = swap_keys_values(self.bucketsSet[i])
+                buckets[self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
+            for bucket in buckets.values():
+                connectBucket(bucket)
 
     """
-    TODO: I can make this a yield function as well. 
-        Then I just have to define m to be large enough without throwing errors
-        And then set M to it's minimum value as soon as we find out what it is.
+    Determine the correct number of bands and their length given a desired threshold maybe??
+    TODO: Need much better method for determine the number of bands.
+
+    numBands and bandLength define each other given numHashes. So just need to decide which to optimize.
     """
-    def getKmers(self):
-        kmers = self.fracMinHashKmers()
-        return kmers
+    def getNumBands(self, threshold):
+        numBands = min(40, self.numHashes) 
+        bandLength = self.numHashes // numBands
+        return numBands, bandLength
 
     """
     Using a subset of the total kmer set allows us to compute much faster. We get this set by using
@@ -130,21 +109,17 @@ class minHashFilter(Filter):
         from https://www.biorxiv.org/content/10.1101/2022.01.11.475838v2.full.pdf
     """
     def fracMinHashKmers(self, s = 0.5e-2):
-        kmers = []
         maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
         limit = maxVal*s
-        print(limit)
+        kmers = []
         for kmer in self.generateKmers(self.K):
-            #print(abs(hash(kmer)))
             if abs(hash(kmer)) < limit:
                 kmers.append(kmer)
         self.m = len(kmers)
-        print("Downsampled to:", self.m)
         return kmers
 
-
     """
-    Generate all possible kmers without storing them in memory.
+    Yield all possible kmers without storing them in memory.
     """
     def generateKmers(self, k:int):
         alphabet = "ACTG"
@@ -160,10 +135,7 @@ class minHashFilter(Filter):
     Connect elements in any of the same bucket.
     '''
     def connect(self, i, j):
-        for buckets in self.bucketsSet:
-            if buckets[i] == buckets[j]:
-                return True
-        return False
+        return self.adjacencyMatrix[i,j]
 
 def main():
     saveFig, param, test = readInputs()

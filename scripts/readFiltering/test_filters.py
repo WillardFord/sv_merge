@@ -7,6 +7,7 @@ from os.path import join
 import os
 from abc import ABC, abstractmethod
 import sys
+import subprocess
 
 """
 Generic Abstract Class for filtering methods.
@@ -27,7 +28,7 @@ class Filter(ABC):
         self.seqs = seqs
         self.labels = labels
         self.n :int = len(seqs)
-        self.adjacencyMatrix: list[list[bool]] = [[0 for _ in range(self.n)] for _ in range(self.n)]
+        self.adjacencyMatrix = np.zeros((self.n, self.n), bool)
         labelSet = set(self.labels)
         self.firstOcc = [0 for _ in range(len(labelSet))]
         for i, item in enumerate(sorted(labelSet)):
@@ -228,7 +229,20 @@ def readInputs():
     return saveFig, param, test
 
 def main():
-    print("\nWhat are you doing here?\n\nThis is a resources file called by other filters.")
+    print("Testing all other filters using default parameters.")
+    filters = [ ("sketchFilter.py",     "1000,3"),
+                ("minHashFilter.py",    "1000,12"),
+                ("lengthFilter.py",     "10"),
+                ("hashFilter.py",       "5"),
+                ("euclideanFilter.py",  "1000,3,5")
+    ]
+
+    # Sketch Filter
+    command = ["python", "", "--test" ,"--param", ""]
+    for filterFile, params in filters:
+        command[1] = filterFile
+        command[4] = params
+        subprocess.run(command)
 
 if __name__ == "__main__":
     main()

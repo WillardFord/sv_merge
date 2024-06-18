@@ -45,23 +45,9 @@ class euclideanFilter(Filter):
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
     def preprocessReads(self):
-        self.buildCharacteristicMatrixCounts()
+        self.m = np.power(4,self.K)
         self.projectionSignature()
         self.band()
-
-    """
-    Generate Matrix of kmers x seqs
-        -- In practice this matrix is too large to store in memory. But it's unclear how to operate instead.
-        -- count of each kmer by each sequence.
-        -- this a very strict definition
-    """
-    def buildCharacteristicMatrixCounts(self):
-        kmers  = self.getKmers()
-        self.characteristicMatrix = np.zeros((self.m, self.n), np.uint32)
-        for i, seq in enumerate(self.seqs):
-            for j, kmer in enumerate(kmers):
-                self.characteristicMatrix[j,i] = len(re.findall(f'(?={kmer})', seq))
-        print(self.characteristicMatrix)
 
     """
     Generate signatureMatrix of hashs x seqs
@@ -73,10 +59,29 @@ class euclideanFilter(Filter):
         hashes = self.getRandomLines()
         for j in range(self.numHashes): # iterate lines
             for i in range(self.n): # iterate strings
-                self.signatureMatrix[j,i] = self.projectAndBin(self.characteristicMatrix[:,i], hashes[j])
-        print(self.signatureMatrix)
-        for i in range(3):
-            print((self.signatureMatrix[0:25,i]))
+                self.signatureMatrix[j,i] = self.projectAndBin(self.getCharacteristicVector(i), hashes[j])
+
+    """
+    Return the characteristic vector for a single read, i
+    """
+    def getCharacteristicVector(self, i):
+        characteristicVector = np.zeros(self.m)
+        for j, kmer in enumerate(self.generateKmers(self.K)):
+            characteristicVector[j] = len(re.findall(f'(?={kmer})', self.seqs[i]))
+        return characteristicVector
+
+    """
+    Generate all possible kmers without storing them in memory.
+    """
+    def generateKmers(self, k:int):
+        alphabet = "ACTG"
+        if k == 1:
+            for char in alphabet:
+                yield char
+        else:
+            for mer in self.generateKmers(k-1):
+                for char in alphabet:
+                    yield mer + char
 
     """
     This function returns a random set of unit lines to use with projection as hash functions
@@ -118,87 +123,36 @@ class euclideanFilter(Filter):
         -- t ~= (1/b)^(1/r)
     """
     def band(self, threshold = 0.85):
-        def swap_keys_values(dictionary):
-            new_dictionary = {}
-            for key, values in dictionary.items():
-                for value in values:
-                    new_dictionary[value] = key
-            return new_dictionary
-        def get_numBands_bandLength(threshold):
-            numBands = min(50, self.numHashes) 
-            bandLength = self.numHashes // numBands
-            #print(numBands, bandLength)
-            #print(f"Threshold {np.power(1/numBands, 1/bandLength)}")
-            return numBands, bandLength
+        def connectBucket(bucket):
+            for i in range(len(bucket)-1):
+                for j in range(i+1, len(bucket)):
+                    self.adjacencyMatrix[bucket[i],bucket[j]] = True
+                    self.adjacencyMatrix[bucket[j],bucket[i]] = True
 
-        # TODO: Automate how b, r are chosen. 
-        # These values give about the desired threshold 
-        numBands, bandLength = get_numBands_bandLength(threshold)
-        numBands = 40
-        bandLength = 25
-        self.bucketsSet = [defaultdict(list[int]) for _ in range(numBands)]
+        numBands, bandLength = self.getNumBands(threshold)
         for i in range(numBands):
+            buckets = defaultdict(list[int])
             for j in range(self.n):
-                self.bucketsSet[i][self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
-            self.bucketsSet[i] = swap_keys_values(self.bucketsSet[i])
+                buckets[self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
+            for bucket in buckets.values():
+                connectBucket(bucket)
 
     """
-    Returns set of all kmers to use for generating the characteristicMatrix
-        For large K we should use a random subset of all kmers but for small k we can use them all.
-    """
-    def getKmers(self):
-        kmers = self.allKmers()
-        self.m = len(kmers)
-        return kmers
+    Determine the correct number of bands and their length given a desired threshold maybe??
+    TODO: Need much better method for determine the number of bands.
 
+    numBands and bandLength define each other given numHashes. So just need to decide which to optimize.
     """
-    Return set of all kmers
-    """
-    def allKmers(self):
-        kmers = []
-        for kmer in self.generateKmers(self.K):
-            kmers.append(kmer)
-        return kmers
-
-    """
-    Using a subset of the total kmer set allows us to compute much faster. We get this set by using
-        Using s = 1000 as suggest default. This allows large k's to be used. (21, 31, 51)
-    
-        FRACs(W ) = { h(w) ≤ H/s ∣ ∀w ∈ W } 
-        from https://www.biorxiv.org/content/10.1101/2022.01.11.475838v2.full.pdf
-    """
-    def fracMinHashKmers(self, s = 0.5e-2):
-        kmers = []
-        maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
-        limit = maxVal*s
-        print(limit)
-        for kmer in self.generateKmers(self.K):
-            if abs(hash(kmer)) < limit:
-                kmers.append(kmer)
-        print("Downsampled to:", len(kmers))
-        return kmers
-
-    """
-    Generate all possible kmers without storing them in memory.
-    """
-    def generateKmers(self, k:int):
-        alphabet = "ACTG"
-        if k == 1:
-            for char in alphabet:
-                yield char
-        else:
-            for mer in self.generateKmers(k-1):
-                for char in alphabet:
-                    yield mer + char
+    def getNumBands(self, threshold):
+        numBands = min(40, self.numHashes) 
+        bandLength = self.numHashes // numBands
+        return numBands, bandLength
 
     '''
     Connect elements in any of the same bucket.
     '''
     def connect(self, i, j):
-        for buckets in self.bucketsSet:
-            if buckets[i] == buckets[j]:
-                return True
-        return False
+        return self.adjacencyMatrix[i,j]
 
 def main():
     saveFig, param, test = readInputs()

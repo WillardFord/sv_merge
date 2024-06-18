@@ -1,7 +1,7 @@
 """
 Runnable File containing a hashFilter class:
 
-python hashFilter.py [thresh]
+python hashFilter.py --param 5
 """
 
 from test_filters import Filter, runFilter, readInputs
