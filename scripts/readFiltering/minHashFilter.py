@@ -67,19 +67,6 @@ class minHashFilter(Filter):
                 self.characteristicMatrix[j,i] = kmer in seq
 
     """
-    Generate Matrix of kmers x seqs
-        -- In practice this matrix is too large to store in memory. But it's unclear how to operate instead.
-        -- count of each kmer by each sequence.
-        -- this a very strict definition
-    """
-    def buildCharacteristicMatrixCounts(self):
-        kmers  = self.getKmers()
-        self.characteristicMatrix = np.zeros((self.m, self.n), np.uint32)
-        for i, seq in enumerate(self.seqs):
-            for j, kmer in enumerate(kmers):
-                self.characteristicMatrix[j,i] = len(re.findall(f'(?={kmer})', seq))
-
-    """
     Generate signatureMatrix of hashs x seqs
         In practice use hashmap not permutation, but simpler in Python
     """

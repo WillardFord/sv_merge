@@ -32,10 +32,6 @@ class Filter(ABC):
         self.firstOcc = [0 for _ in range(len(labelSet))]
         for i, item in enumerate(sorted(labelSet)):
             self.firstOcc[i] = self.labels.index(item)
-        try:
-            print(self.title, file = sys.stderr)
-        except:
-            self.title = "Unspecified Filter"
 
     '''
     Preprocess all reads, required for some filters
@@ -108,7 +104,8 @@ class Filter(ABC):
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix and 
 '''
-def testFilter(filter : Filter, saveFig, test):
+def testFilter(filter : Filter, saveFig):
+    print(filter.title)
     seqs, labels = readFastq()
     filter.fill(seqs, labels)
     tpr, fpr = runLoadedFilter(filter, saveFig)
@@ -134,7 +131,7 @@ General Callable Function to handle average results and test runs.
 """
 def runFilter(filter : Filter, saveFig, test):
     if test:
-        return testFilter(saveFig)
+        return testFilter(filter, saveFig)
     
     runAllSamples(filter, saveFig)
 
@@ -152,6 +149,7 @@ def runAllSamples(filter, saveFig):
         TotNeg += sampleTotNeg
 
     print(f"{TruePos}:{TotPos}\t{FalsePos}:{TotNeg}")
+    print(f"TPR:\t{TruePos/TotPos}\nFPR:\t{FalsePos/TotNeg}" ,file = sys.stderr)
 
 
 
@@ -183,19 +181,6 @@ def runAllRegions(filter, saveFig, directory):
 
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
-
-
-
-def loadSamplesSeqs(region:str):
-    chrom, start, end = region
-    seqs = []
-    labels = []
-
-    sampleSeqs, sampleLabels = readFastq()
-    seqs += sampleSeqs
-    labels += sampleLabels
-    return seqs, labels
-
 """
 Read in reads and labels form a phased fastq file
 """
@@ -207,11 +192,9 @@ def readFastq(fastqFile:str = None):
     labels :list[str] = []
     with open(fastqFile,"r") as f:
         i = 0
+        curHap = -1
         for line in f.readlines():
-            if i % 4 == 2:
-                curHap = -1
-                curSeq = ""
-            elif i % 4 == 0:
+            if i % 4 == 0:
                 for segment in line.strip().split(" "):
                     if segment.startswith("HP"):
                         curHap = segment.split(":")[-1]
@@ -221,6 +204,8 @@ def readFastq(fastqFile:str = None):
                 curSeq = line.strip()
                 seqs.append(curSeq)
                 labels.append(curHap)
+                curHap = -1
+                curSeq = ""
             i += 1
     return seqs, labels
 

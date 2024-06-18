@@ -1,10 +1,8 @@
 '''
 Given filter file name, finetune the parameter over all regions and all samples
 
-python finetuneFilterParams.py hashFilter.py 1 20
-
-TODO Future steps should consider that different regions have different properties --> Only optimize over certain labeled regions
-    i.e. highly repetitive regions, [types of structural variants] ask Fabio and Ryan for a competant list.
+TODO Change this file to instead have a different function for each filter type. 
+    When running main simply specify the filter type (maybe also which param) and then let it optimize.
 '''
 import subprocess
 import sys
