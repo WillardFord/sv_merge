@@ -106,8 +106,12 @@ Filter Testing method that saves a heatmap Adjacency Matrix and
 '''
 def testFilter(filter : Filter, saveFig):
     print(filter.title)
-    seqs, labels = readFastq()
+
+    fastqFile = "/Users/wford/Documents/sv_merge/output/test_extract/chr10_756193-756593.fastq"
+    seqs, labels = readFastq(fastqFile)
+
     filter.fill(seqs, labels)
+
     tpr, fpr = runLoadedFilter(filter, saveFig)
     print(f"{tpr}\t{fpr}")
 
@@ -147,11 +151,10 @@ def runAllSamples(filter, saveFig):
         TotPos += sampleTotPos
         FalsePos += sampleFalsePos
         TotNeg += sampleTotNeg
+        print(f"Completed\t{directory}")
 
     print(f"{TruePos}:{TotPos}\t{FalsePos}:{TotNeg}")
     print(f"TPR:\t{TruePos/TotPos}\nFPR:\t{FalsePos/TotNeg}" ,file = sys.stderr)
-
-
 
 """
 Test filter on all regions for a single sample and return the total number of false positives, 
@@ -178,15 +181,14 @@ def runAllRegions(filter, saveFig, directory):
             sampleTotPos += int(regionTotPos)
             sampleFalsePos += int(falsePos)
             sampleTotNeg += int(regionTotNeg)
+        print(f"Completed\t{join(directory, chrom)}")
 
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
 """
 Read in reads and labels form a phased fastq file
 """
-def readFastq(fastqFile:str = None):
-    if fastqFile == None:
-        fastqFile = "/Users/wford/Documents/sv_merge/output/test_extract/chr10_756193-756593.fastq"
+def readFastq(fastqFile:str):
 
     seqs :list[str] = []
     labels :list[str] = []

@@ -1,18 +1,11 @@
 """
-Runnable File containing a euclidean class:
+Runnable File containing a sketch filter class:
+    This approximates the cosine distance between two nodes.
 
-python euclideanFilter.py --plot --test --param 1000,3,5
+python sketchFilter.py --plot --test --param 1000,3
 
->> Still experimenting with params in this filter: numHashes,K,binWidth
+>> Still experimenting with params in this filter: numHashes,K
 TODO: Banding parameters are basically random. We need a better way to choose them.
-
-Notes:
-    python euclideanFilter.py --test --param 1000,2,10
-
-    This filter has a huge degree of variance. Certain reads seem to never cluster together very nicely,
-        except on certain runs with the same parameters where it all of sudden works.
-        TODO Adding lines that don't just go through the origin would generate a farther 
-            distance from most of the sequence vectors and perahaps reduce the variance that we are seeing.
 """
 
 from test_filters import Filter, runFilter, readInputs
@@ -29,12 +22,12 @@ class euclideanFilter(Filter):
     threshold:  Desired threshold for grouping together sequences. between 0 and 1
         b:
         r:
-    binWidth: The desired binWidth in a single random line for aligning.
+    binWidth: The desired binWidth in 
     '''
     def __init__(self, param):
         params = param.split(",")
-        self.numHashes, self.K, self.binWidth = int(params[0]), int(params[1]), float(params[2])
-        self.title = f"euclideanFilter_numHashes={self.numHashes}_K={self.K}_binWidth={self.binWidth}"
+        self.numHashes, self.K= int(params[0]), int(params[1])
+        self.title = f"sketchFilter_numHashes={self.numHashes}_K={self.K}"
 
     '''
     Preprocess all reads, required for some filters
@@ -46,7 +39,7 @@ class euclideanFilter(Filter):
     '''
     def preprocessReads(self):
         self.buildCharacteristicMatrixCounts()
-        self.projectionSignature()
+        self.sketchSignature()
         self.band()
 
     """
@@ -61,52 +54,37 @@ class euclideanFilter(Filter):
         for i, seq in enumerate(self.seqs):
             for j, kmer in enumerate(kmers):
                 self.characteristicMatrix[j,i] = len(re.findall(f'(?={kmer})', seq))
-        print(self.characteristicMatrix)
+
 
     """
     Generate signatureMatrix of hashs x seqs
-        A hash, in this case, is the projection of the seqs characteristicMatrix
-        represenation onto a random line.
+        A hash, in this case, is --
     """
-    def projectionSignature(self):
-        self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
-        hashes = self.getRandomLines()
-        for j in range(self.numHashes): # iterate lines
+    def sketchSignature(self):
+        self.signatureMatrix = np.zeros((self.numHashes, self.n))
+        hashes = self.getRandomPlanes()
+        for j in range(self.numHashes): # iterate planes
             for i in range(self.n): # iterate strings
-                self.signatureMatrix[j,i] = self.projectAndBin(self.characteristicMatrix[:,i], hashes[j])
-        print(self.signatureMatrix)
-        for i in range(3):
-            print((self.signatureMatrix[0:25,i]))
+                self.signatureMatrix[j,i] = self.sketch(self.characteristicMatrix[:,i], hashes[j])
 
     """
-    This function returns a random set of unit lines to use with projection as hash functions
-        Only generate lines through the origin for now, but some amount of shift may be worth testing later
-        - The smaller distances from the projected lines without it may cause most strings to appear too similar.
-    Uniformly distributed lines on unit hypersphere: 
-        https://math.stackexchange.com/questions/444700/uniform-distribution-on-the-surface-of-unit-sphere
+    This function returns a random set of binary sketches. 
+    They function as normal vectors to separating planes used as hashes
     """
-    def getRandomLines(self):
+    def getRandomPlanes(self):
         dimensions = self.m
         lines = np.zeros((self.numHashes, dimensions))
         for i in range(self.numHashes):
-            s = np.random.normal(0, 1, dimensions)
-            lines[i,:] = s / np.sqrt(sum(s*s))
+            lines[i,:] = np.random.choice([1, -1], size=dimensions)
         return lines
 
-    """
-    Compute projection of point onto a random line and calculate which bin the point falls into.
-    Returns pos or neg integer indicating which bin projected into. i.e.
-    |-2|-1|0(contains origin at leftmost boundary)|1|2|
-        Bins are computed as number of binwidths from the origin.
-        - Because we are centered at the origin we can simply compare first dimensions.
-        - A 0 value in our vector in the first dimension is rare enough we don't care
-        - Use binWidth projected to first dimension as our comparison width
-        Don't need to normalize projections because we use unit vectors
-    """
-    def projectAndBin(self, characteristicVector, line):
-        projection = np.dot(line,characteristicVector)*line
-        projectedWidth = line[0] * self.binWidth
-        return int(projection[0] // projectedWidth)
+    def sketch(self, characterisicVector, plane):
+        value = np.dot(characterisicVector, plane)
+        if value > 0:
+            return 1
+        if value < 0:
+            return -1
+        return np.random.choice([1, -1])
 
     """
     TODO: choose bands to be more optimal for filter and context
