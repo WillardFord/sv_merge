@@ -20,7 +20,7 @@ python minHashFilter.py --plot --param 1000,13,40
 """
 
 from test_filters import Filter, runFilter, readInputs
-from collections import defaultdict 
+
 import numpy as np
 
 class minHashFilter(Filter):
@@ -48,6 +48,7 @@ class minHashFilter(Filter):
     3. Bin using band method
     '''
     def preprocessReads(self):
+        self.fracMinHashKmers()
         self.minHashSignature()
         self.band()
 

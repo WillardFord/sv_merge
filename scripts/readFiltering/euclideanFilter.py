@@ -1,7 +1,7 @@
 """
 Runnable File containing a euclidean class:
 
-python euclideanFilter.py --plot --test --param 1000,3,5,40
+python euclideanFilter.py --plot --test --param 1000,20,5,40
 
 >> Still experimenting with params in this filter: numHashes,K,binWidth,bandLength
 TODO: Banding parameters are basically random. We need a better way to choose them.
@@ -43,7 +43,7 @@ class euclideanFilter(Filter):
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
     def preprocessReads(self):
-        self.m = np.power(4,self.K)
+        self.fracMinHashKmers()
         self.projectionSignature()
         self.band()
 

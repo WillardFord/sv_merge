@@ -1,8 +1,8 @@
 #!/bin/bash
 
-BED_DIR="/Users/wford/Documents/windows_per_sample_per_chrom_flank_0_dipcall_het/intersection_002_733/"
+BED_DIR="../../output/hg002_beds"
 
-for sample in HG002 HG00733
+for sample in HG002
 do
     for i in $(seq 1 22);
     do

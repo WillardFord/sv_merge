@@ -7,12 +7,9 @@ python sketchFilter.py --plot --test --param 1000,3,40
 >> Still experimenting with params in this filter: numHashes,K,bandLength
 TODO: Banding parameters are basically random. We need a better way to choose them.
 """
-
+import time
 from test_filters import Filter, runFilter, readInputs
-from collections import defaultdict 
 import numpy as np
-
-import re
 
 class euclideanFilter(Filter):
     '''
@@ -38,8 +35,8 @@ class euclideanFilter(Filter):
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
     def preprocessReads(self):
-        self.m = np.power(4, self.K)
         self.sketchSignature()
+        print("Woot")
         self.band()
 
     """
@@ -48,25 +45,35 @@ class euclideanFilter(Filter):
     """
     def sketchSignature(self):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
-        hashes = self.getRandomPlanes()
-        for j in range(self.numHashes): # iterate planes
-            for i in range(self.n): # iterate strings
-                self.signatureMatrix[j,i] = self.sketch(self.getCharacteristicVector(i), hashes[j])
+        for i in range(self.n): # iterate strings
+            for j, line in enumerate(self.getRandomPlanes()):
+                print("Built random line\t\t\t", time.time())
+                characteristicVector = self.getCharacteristicVector(i)
+                print("Built characteristic vector\t\t", time.time())
+                self.signatureMatrix[j,i] = self.sketch(characteristicVector, line)
+                print("Completed one hash\t\t\t", time.time())
+            print("Completed one read")
+        print("Built signatureMatrix!")
 
     """
-    This function returns a random set of binary vectors in [-1, 1]. 
-    They function as normal vectors to separating planes used as hashes
+    This function returns a random set of binary vectors in [-1, 1] that describe a plane.
+
+    TODO: takes ~ 6 seconds for k=20 and s=1e-3 --> dimension=(4^20)*s*1.05, 
+        this needs to be basically instant.
     """
     def getRandomPlanes(self):
-        dimensions = self.m
-        lines = np.zeros((self.numHashes, dimensions))
-        for i in range(self.numHashes):
-            lines[i,:] = np.random.choice([1, -1], size=dimensions)
-        return lines
+        seed = 1
+        np.random.seed(seed)
+        for _ in range(self.numHashes):
+            orthonormal_line = np.random.choice([1, -1], size=self.m)
+            yield orthonormal_line
 
     """
     Returns 1 if dot product is positive, else -1. (0's are randomly assigned)
     This approximates the cosine distance though is not exact.
+
+    TODO: takes ~1.6 for k=20 and s=1e-3 --> dimension=(4^20)*s*1.05, 
+        this needs to be basically instant
     """
     def sketch(self, characterisicVector, plane):
         value = np.dot(characterisicVector, plane)

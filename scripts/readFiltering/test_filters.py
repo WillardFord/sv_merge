@@ -7,6 +7,7 @@ from abc import ABC, abstractmethod
 import sys
 import subprocess
 from collections import defaultdict
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -37,6 +38,17 @@ class Filter(ABC):
             self.firstOcc[i] = self.labels.index(item)
         self.fastqFile = fastqFile
 
+        s = 1e-3
+        maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
+        self.limit = maxVal*s
+
+        # Slightly larger to account for non-perfect uniformity of hash function
+        self.m = int(np.power(4, self.K) * s * 1.05)
+
+        # Assign each seen kmer a unique index
+        self.kmer_dict = dict()
+        self.next_kmer_index = 0
+
     '''
     Preprocess all reads, required for some filters
     '''
@@ -66,46 +78,31 @@ class Filter(ABC):
     Return the characteristic vector for a single read, i
     """
     def getCharacteristicVector(self, i):
-        """
-        Generate all possible kmers without storing them in memory.
-        """
-        def generateKmers(k:int):
-            alphabet = "ACGT"
-            if k == 1:
-                for char in alphabet:
-                    yield char
-            else:
-                for mer in generateKmers(k-1):
-                    for char in alphabet:
-                        yield mer + char
-
         characteristicVector = np.zeros(self.m, dtype=np.int16)
 
-        kmerDir = f"/Users/wford/Documents/sv_merge/output/kmerTables/{int(self.K)}mers"
+        kmerDir = f"../../output/kmerTables/{int(self.K)}mers"
         chrom = os.path.basename(self.fastqFile).split("_")[0]
         regionDir = os.path.join(kmerDir, chrom, os.path.basename(self.fastqFile)[:-6])
         tableFile = os.path.join(regionDir, f"read{i+1}.ktab") # Files are 1-indexed
-        #print(tableFile)
 
         # Some regions are too small, don't have haplotypes, or too few reads and led to errors. So table doesn't exist
         if not os.path.isfile(tableFile):
             raise FileNotFoundError(tableFile)
 
-        command = ["tabex", tableFile, "LIST"]
-        table_output = subprocess.check_output(command)
-        table_output_str = str(table_output)
-        del table_output
+        command = ["Tabex", tableFile, "LIST"]
+        table_output = str(subprocess.check_output(command))
 
-        # Base 4 to base 10 conversion
-        alphabet = {'A':0, 'C':1, 'G':2, 'T':3, 'a':0, 'c':1, 'g':2, 't':3}
-        seq_to_index = lambda s: sum(alphabet[c] * (4 ** p) for p, c in enumerate(s[::-1]))
-
-        for row in  table_output_str.split("\\n")[1:]:
+        for row in  table_output.split("\\n")[1:-1]: # First and last line don't contain kmers
             kmer, count = row.strip().split("=")
-            count = int(count.strip())
-            kmer = kmer.split(":")[1].strip()
-            characteristicVector[seq_to_index(kmer)] = count
+            kmer = kmer.split(":")[1].strip().upper()
+            if abs(hash(kmer)) < self.limit:
+                count = int(count.strip())
 
+                # Get kmer index
+                if kmer not in self.kmer_dict:
+                    self.kmer_dict[kmer] = self.next_kmer_index
+                    self.next_kmer_index += 1
+                characteristicVector[self.kmer_dict[kmer]] = count
         return characteristicVector
 
     """
@@ -184,17 +181,9 @@ Filter Testing method that saves a heatmap Adjacency Matrix
 def testFilter(filter : Filter, saveFig):
     print(filter.title)
 
-    testDir = "/Users/wford/Documents/sv_merge/output/test_extract/chr10"
+    testDir = "../../output/HG002/chr4/"
     regions = [
-        "chr10_756193-756593.fastq",
-        #"chr10_764127-765357.fastq",
-        #"chr10_774190-774696.fastq",
-        #"chr10_775244-776398.fastq",
-        #"chr10_776350-776890.fastq",
-        #"chr10_777367-779252.fastq",
-        #"chr10_781668-782528.fastq",
-        #"chr10_787900-788394.fastq",
-        #"chr10_790342-790742.fastq"
+        "chr4_853676-854700.fastq",
     ]
 
     totTruePos, totPos, totFalsePos, totNeg  = 0, 0, 0, 0
@@ -344,10 +333,10 @@ def readInputs():
     return saveFig, param, test
 
 def main():
-    print("Testing all other filters using default parameters.")
-    filters = [ ("sketchFilter.py",     "1000,3"),
-                ("minHashFilter.py",    "1000,12"),
-                ("euclideanFilter.py",  "1000,3,5"),
+    print("Testing all filters using default parameters.")
+    filters = [ ("sketchFilter.py",     "1000,20"),
+                ("minHashFilter.py",    "1000,20"),
+                ("euclideanFilter.py",  "1000,20,5,40"),
                 ("lengthFilter.py",     "10"),
                 ("hashFilter.py",       "5")
     ]
@@ -355,6 +344,7 @@ def main():
     # Sketch Filter
     command = ["python", "", "--test" ,"--param", ""]
     for filterFile, params in filters:
+        print("Testing:", filterFile)
         command[1] = filterFile
         command[4] = params
         subprocess.run(command)
