@@ -1,10 +1,10 @@
-#! /bin/bash
+#!/bin/bash
 
 BED_DIR="/Users/wford/Documents/windows_per_sample_per_chrom_flank_0_dipcall_het/intersection_002_733/"
 
 for sample in HG002 HG00733
 do
-    for i in $(seq 1 23);
+    for i in $(seq 1 22);
     do
         OUTPUTDIR="../output/$sample/chr$i"
         BED="$BED_DIR"chr"$i".bed""
@@ -19,6 +19,7 @@ do
             --flank_length 200 \
             --n_threads 4 \
             --require_spanning \
-            --tags PS,HP
+            --tags PS,HP \
+            --force_forward
     done
 done

@@ -1,18 +1,13 @@
 """
 Runnable File containing a euclidean class:
 
-python euclideanFilter.py --plot --test --param 1000,3,5
+python euclideanFilter.py --plot --test --param 1000,3,5,40
 
->> Still experimenting with params in this filter: numHashes,K,binWidth
+>> Still experimenting with params in this filter: numHashes,K,binWidth,bandLength
 TODO: Banding parameters are basically random. We need a better way to choose them.
 
-Notes:
-    python euclideanFilter.py --test --param 1000,2,10
-
-    This filter has a huge degree of variance. Certain reads seem to never cluster together very nicely,
-        except on certain runs with the same parameters where it all of sudden works.
-        TODO Adding lines that don't just go through the origin would generate a farther 
-            distance from most of the sequence vectors and perahaps reduce the variance that we are seeing.
+This filter is sensitive to read orientation in ways the other filters are not.
+This makes sense theoretically, and explains the variance we were seeing where half of our reads didn't seem to group nicely.
 """
 
 from test_filters import Filter, runFilter, readInputs
@@ -20,6 +15,8 @@ from collections import defaultdict
 import numpy as np
 
 import re
+import os
+import subprocess
 
 class euclideanFilter(Filter):
     '''
@@ -34,6 +31,7 @@ class euclideanFilter(Filter):
     def __init__(self, param):
         params = param.split(",")
         self.numHashes, self.K, self.binWidth = int(params[0]), int(params[1]), float(params[2])
+        self.bandLength = int(params[3])
         self.title = f"euclideanFilter_numHashes={self.numHashes}_K={self.K}_binWidth={self.binWidth}"
 
     '''
@@ -56,101 +54,39 @@ class euclideanFilter(Filter):
     """
     def projectionSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
-        hashes = self.getRandomLines()
-        for j in range(self.numHashes): # iterate lines
-            for i in range(self.n): # iterate strings
-                self.signatureMatrix[j,i] = self.projectAndBin(self.getCharacteristicVector(i), hashes[j])
+        for i in range(self.n): # iterate strings
+            for j, (direction, offset) in enumerate(self.getRandomLines()):
+                charVector = self.getCharacteristicVector(i)
+                self.signatureMatrix[j,i] = self.projectAndBin(charVector, direction, offset)
 
     """
-    Return the characteristic vector for a single read, i
-    """
-    def getCharacteristicVector(self, i):
-        characteristicVector = np.zeros(self.m)
-        for j, kmer in enumerate(self.generateKmers(self.K)):
-            characteristicVector[j] = len(re.findall(f'(?={kmer})', self.seqs[i]))
-        return characteristicVector
-
-    """
-    Generate all possible kmers without storing them in memory.
-    """
-    def generateKmers(self, k:int):
-        alphabet = "ACTG"
-        if k == 1:
-            for char in alphabet:
-                yield char
-        else:
-            for mer in self.generateKmers(k-1):
-                for char in alphabet:
-                    yield mer + char
-
-    """
-    This function returns a random set of unit lines to use with projection as hash functions
-        Only generate lines through the origin for now, but some amount of shift may be worth testing later
-        - The smaller distances from the projected lines without it may cause most strings to appear too similar.
+    This function yields a random set of unit lines to use with projection as hash functions
     Uniformly distributed lines on unit hypersphere: 
         https://math.stackexchange.com/questions/444700/uniform-distribution-on-the-surface-of-unit-sphere
     """
     def getRandomLines(self):
+        seed = 1
+        np.random.seed(seed)
         dimensions = self.m
-        lines = np.zeros((self.numHashes, dimensions))
-        for i in range(self.numHashes):
+        for _ in range(self.numHashes):
             s = np.random.normal(0, 1, dimensions)
-            lines[i,:] = s / np.sqrt(sum(s*s))
-        return lines
+            direction = s / np.sqrt(sum(s*s))
+            offset = np.random.uniform(0,5,dimensions)
+            yield direction, offset
 
     """
     Compute projection of point onto a random line and calculate which bin the point falls into.
     Returns pos or neg integer indicating which bin projected into. i.e.
-    |-2|-1|0(contains origin at leftmost boundary)|1|2|
-        Bins are computed as number of binwidths from the origin.
-        - Because we are centered at the origin we can simply compare first dimensions.
-        - A 0 value in our vector in the first dimension is rare enough we don't care
-        - Use binWidth projected to first dimension as our comparison width
-        Don't need to normalize projections because we use unit vectors
+        |-2|-1|0(contains origin at leftmost boundary)|1|2|
     """
-    def projectAndBin(self, characteristicVector, line):
-        projection = np.dot(line,characteristicVector)*line
+    def projectAndBin(self, characteristicVector, line, offset):
+        projection = np.dot(line,characteristicVector)*line + offset
         projectedWidth = line[0] * self.binWidth
         return int(projection[0] // projectedWidth)
 
     """
-    TODO: choose bands to be more optimal for filter and context
-    Use banding technique to bin reads by similarity
-        -- Choose threshold, t between 0 and 1 to determine our false positive rate. 
-            Higher threshold indicates less false postives
-        -- b*r = n
-            w/ b = number of bands, r = band length, n = number of hashes
-        -- t ~= (1/b)^(1/r)
-    """
-    def band(self, threshold = 0.85):
-        def connectBucket(bucket):
-            for i in range(len(bucket)-1):
-                for j in range(i+1, len(bucket)):
-                    self.adjacencyMatrix[bucket[i],bucket[j]] = True
-                    self.adjacencyMatrix[bucket[j],bucket[i]] = True
-
-        numBands, bandLength = self.getNumBands(threshold)
-        for i in range(numBands):
-            buckets = defaultdict(list[int])
-            for j in range(self.n):
-                buckets[self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
-            for bucket in buckets.values():
-                connectBucket(bucket)
-
-    """
-    Determine the correct number of bands and their length given a desired threshold maybe??
-    TODO: Need much better method for determine the number of bands.
-
-    numBands and bandLength define each other given numHashes. So just need to decide which to optimize.
-    """
-    def getNumBands(self, threshold):
-        numBands = min(40, self.numHashes) 
-        bandLength = self.numHashes // numBands
-        return numBands, bandLength
-
-    '''
     Connect elements in any of the same bucket.
-    '''
+    """
     def connect(self, i, j):
         return self.adjacencyMatrix[i,j]
 

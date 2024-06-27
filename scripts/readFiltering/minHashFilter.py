@@ -15,14 +15,13 @@ TODO
 
 
 
-python minHashFilter.py --plot --param 1000,13
+python minHashFilter.py --plot --param 1000,13,40
+                                    numHashes,K,bandLength
 """
 
 from test_filters import Filter, runFilter, readInputs
 from collections import defaultdict 
 import numpy as np
-
-import re
 
 class minHashFilter(Filter):
     '''
@@ -35,6 +34,7 @@ class minHashFilter(Filter):
     def __init__(self, param):
         params = param.split(",")
         self.numHashes, self.K = int(params[0]), int(params[1])
+        self.bandLength = int(params[2])
         self.title = f"minHashFilter_numHashes={self.numHashes}_K={self.K}"
 
     '''
@@ -58,48 +58,12 @@ class minHashFilter(Filter):
     def minHashSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
         rng = np.random.default_rng()
-        kmers = self.fracMinHashKmers()
         hashes = [rng.permutation(self.m) for _ in range(self.numHashes)]
-        for j, kmer in enumerate(kmers): # iterate kmers
+        for j, kmer in enumerate(self.fracMinHashKmers()):
             for i in range(self.n): # iterate strings
                 if kmer in self.seqs[i]: # Characteristic Matrix Value
                     for k, perm in enumerate(hashes):
                         self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[j])
-
-
-    """
-    Use banding technique to bin reads by similarity
-        -- Choose threshold, t between 0 and 1 to determine our false positive rate. 
-            Higher threshold indicates less false postives
-        -- b*r = n
-            w/ b = number of bands, r = band length, n = number of hashes
-        -- t ~= (1/b)^(1/r)
-    """
-    def band(self, threshold = 0.85):
-        def connectBucket(bucket):
-            for i in range(len(bucket)-1):
-                for j in range(i+1, len(bucket)):
-                    self.adjacencyMatrix[bucket[i],bucket[j]] = True
-                    self.adjacencyMatrix[bucket[j],bucket[i]] = True
-
-        numBands, bandLength = self.getNumBands(threshold)
-        for i in range(numBands):
-            buckets = defaultdict(list[int])
-            for j in range(self.n):
-                buckets[self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
-            for bucket in buckets.values():
-                connectBucket(bucket)
-
-    """
-    Determine the correct number of bands and their length given a desired threshold maybe??
-    TODO: Need much better method for determine the number of bands.
-
-    numBands and bandLength define each other given numHashes. So just need to decide which to optimize.
-    """
-    def getNumBands(self, threshold):
-        numBands = min(40, self.numHashes) 
-        bandLength = self.numHashes // numBands
-        return numBands, bandLength
 
     """
     Using a subset of the total kmer set allows us to compute much faster. We get this set by using

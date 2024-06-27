@@ -2,9 +2,9 @@
 Runnable File containing a sketch filter class:
     This approximates the cosine distance between two nodes.
 
-python sketchFilter.py --plot --test --param 1000,3
+python sketchFilter.py --plot --test --param 1000,3,40
 
->> Still experimenting with params in this filter: numHashes,K
+>> Still experimenting with params in this filter: numHashes,K,bandLength
 TODO: Banding parameters are basically random. We need a better way to choose them.
 """
 
@@ -54,28 +54,6 @@ class euclideanFilter(Filter):
                 self.signatureMatrix[j,i] = self.sketch(self.getCharacteristicVector(i), hashes[j])
 
     """
-    Return the characteristic vector for a single read, i
-    """
-    def getCharacteristicVector(self, i):
-        characteristicVector = np.zeros(self.m)
-        for j, kmer in enumerate(self.generateKmers(self.K)):
-            characteristicVector[j] = len(re.findall(f'(?={kmer})', self.seqs[i]))
-        return characteristicVector
-
-    """
-    Generate all possible kmers without storing them in memory.
-    """
-    def generateKmers(self, k:int):
-        alphabet = "ACTG"
-        if k == 1:
-            for char in alphabet:
-                yield char
-        else:
-            for mer in self.generateKmers(k-1):
-                for char in alphabet:
-                    yield mer + char
-
-    """
     This function returns a random set of binary vectors in [-1, 1]. 
     They function as normal vectors to separating planes used as hashes
     """
@@ -97,41 +75,6 @@ class euclideanFilter(Filter):
         if value < 0:
             return -1
         return np.random.choice([1, -1])
-
-    """
-    TODO: choose bands to be more optimal for filter and context
-    Use banding technique to bin reads by similarity
-        -- Choose threshold, t between 0 and 1 to determine our false positive rate. 
-            Higher threshold indicates less false postives
-        -- b*r = n
-            w/ b = number of bands, r = band length, n = number of hashes
-        -- t ~= (1/b)^(1/r)
-    """
-    def band(self, threshold = 0.85):
-        def connectBucket(bucket):
-            for i in range(len(bucket)-1):
-                for j in range(i+1, len(bucket)):
-                    self.adjacencyMatrix[bucket[i],bucket[j]] = True
-                    self.adjacencyMatrix[bucket[j],bucket[i]] = True
-
-        numBands, bandLength = self.getNumBands(threshold)
-        for i in range(numBands):
-            buckets = defaultdict(list[int])
-            for j in range(self.n):
-                buckets[self.signatureMatrix[(i*bandLength):((i+1)*bandLength), j].tobytes()].append(j)
-            for bucket in buckets.values():
-                connectBucket(bucket)
-
-    """
-    Determine the correct number of bands and their length given a desired threshold maybe??
-    TODO: Need much better method for determine the number of bands.
-
-    numBands and bandLength define each other given numHashes. So just need to decide which to optimize.
-    """
-    def getNumBands(self, threshold):
-        numBands = min(40, self.numHashes) 
-        bandLength = self.numHashes // numBands
-        return numBands, bandLength
 
     '''
     Connect elements in any of the same bucket.
