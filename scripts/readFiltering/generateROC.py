@@ -60,7 +60,8 @@ def rocLength(location):
     fprs = []
     params = []
     for i in range(0,100,2):
-        localFilter = lengthFilter(i)
+        inputParams = f"{i},0" # 0 indicates absolute threshold, not percentage based 
+        localFilter = lengthFilter(inputParams)
         truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False)
         tpr = truePos/allPos
         fpr = falsePos/allNeg

@@ -11,7 +11,6 @@ This makes sense theoretically, and explains the variance we were seeing where h
 """
 
 from test_filters import Filter, runFilter, readInputs
-from collections import defaultdict 
 import numpy as np
 
 class euclideanFilter(Filter):

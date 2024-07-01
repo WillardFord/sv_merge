@@ -7,6 +7,8 @@ from abc import ABC, abstractmethod
 import sys
 import subprocess
 from collections import defaultdict
+from multiprocessing import Pool
+from itertools import repeat
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -222,7 +224,33 @@ def runAllSamples(filter, saveFig = False, verbose = True):
     Test filter on all regions for a single sample and return the total number of false positives, 
         maximum possible, and equivalent for num false negatives
     """
-    def runAllRegions(filter, saveFig, directory, verbose):
+
+    samplePath = "../../output/"
+    dirs = [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]
+
+    inputs = zip(repeat(filter), repeat(saveFig), dirs, repeat(verbose))
+    numCores = 4
+    with Pool(numCores) as p:
+        print("Starting Parallel Compute!")
+        output = p.starmap(runAllRegions, inputs)
+
+    TruePos, TotPos, FalsePos, TotNeg = 0, 0, 0, 0
+    for sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg in output:
+        TruePos += sampleTruePos
+        TotPos += sampleTotPos
+        FalsePos += sampleFalsePos
+        TotNeg += sampleTotNeg
+
+    if verbose:
+        print(f"{TruePos}:{TotPos}\t{FalsePos}:{TotNeg}")
+        print(f"TPR:\t{TruePos/TotPos}\nFPR:\t{FalsePos/TotNeg}" ,file = sys.stderr)
+
+    return TruePos, TotPos, FalsePos, TotNeg
+
+"""
+Function to run across all regions in parallel
+"""
+def runAllRegions(filter, saveFig, directory, verbose):
         badRegions = open("./tmp/badRegions.txt", "w+")
 
         sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
@@ -248,27 +276,6 @@ def runAllSamples(filter, saveFig = False, verbose = True):
                 print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
         badRegions.close()
         return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
-
-    samplePath = "../../output/"
-    TruePos, TotPos, FalsePos, TotNeg = 0, 0, 0, 0
-    for directory in [x for x in os.listdir(samplePath) if x.startswith("HG")]:
-        if "733" in directory: continue # Data has duplicated reads so skip for now. TODO
-
-        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, saveFig, 
-                                                                                  join(samplePath, directory),
-                                                                                  verbose)
-
-        TruePos += sampleTruePos
-        TotPos += sampleTotPos
-        FalsePos += sampleFalsePos
-        TotNeg += sampleTotNeg
-        print(f"Completed\t{directory}", file=sys.stderr)
-
-    if verbose:
-        print(f"{TruePos}:{TotPos}\t{FalsePos}:{TotNeg}")
-        print(f"TPR:\t{TruePos/TotPos}\nFPR:\t{FalsePos/TotNeg}" ,file = sys.stderr)
-
-    return TruePos, TotPos, FalsePos, TotNeg
 
 """
 Run initialized Filter on fastqFile input
