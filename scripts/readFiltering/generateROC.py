@@ -1,10 +1,15 @@
 '''
 Generate a ROC curve for each filter across all data, assuming that we are using default arguments.
 Generating the curve over number of filters required to test similarity.
+
+TODO: We'd rather save the characteristic matrix for each filter given some parameters so that we can test several different combination methods at once.
+    - minHash
+    - euclidean
+    - sketch
 '''
 
+import os
 import sys
-from multiprocessing import Pool
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -62,7 +67,9 @@ def rocLength(location):
     for i in range(0,100,2):
         inputParams = f"{i},0" # 0 indicates absolute threshold, not percentage based 
         localFilter = lengthFilter(inputParams)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False)
+
+        truePos, allPos, falsePos, allNeg, outFilter = runFilter(localFilter, verbose = False)
+
         tpr = truePos/allPos
         fpr = falsePos/allNeg
 
@@ -73,7 +80,7 @@ def rocLength(location):
         print(f"Completed param:{i}")
         print(f"{truePos}:{allPos}\t{falsePos}:{allNeg}")
 
-        if tpr == 1 or tprs[-1] - tprs[-2] < .015 :
+        if i > 0 and (tpr == 1 or tprs[-1] - tprs[-2] < .015):
             break
 
     rows = sorted(zip(tprs, fprs, params), key=lambda x: x[1])
@@ -85,41 +92,26 @@ def rocLength(location):
 """
 Calculate the tprs and fprs of lengthFilter
 """
-def rocEuclidean(location):
-    tprs = []
-    fprs = []
-    params = []
-    for i in range(1,200,2):
-        param =  f"1000,10,5,{i}"
-        localFilter = euclideanFilter(param)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True)
-        tpr = truePos/allPos
-        fpr = falsePos/allNeg
+def rocEuclidean():
+    characteristicDirectory = "../../output/charMtxs/euclidean"
 
-        tprs.append(tpr)
-        fprs.append(fpr)
-        params.append(param)
+    inputParams =  f"1000,10,5,1"
+    outputDirectory = os.path.join(characteristicDirectory,inputParams)
+    os.makedirs(outputDirectory, exist_ok=True)
 
-        print(f"Completed params:{params}")
-        print(f"{truePos}:{allPos}\t{falsePos}:{allNeg}")
-
-        if tpr == 1 or tprs[-1] - tprs[-2] < .015 :
-            break
-
-    rows = sorted(zip(tprs, fprs, params), key=lambda x: x[1])
-    toCSV(location, rows)
-
-    tprs, fprs, params = zip(*rows)
-    plotROC(tprs, fprs, location)
+    localFilter = euclideanFilter(inputParams)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory)
 
 def main():
     filterFile = sys.argv[1]
-    location = sys.argv[2]
 
-    if filterFile == "lengthFilter":
+    if "length" in filterFile:
+        location = sys.argv[2]
         rocLength(location)
-    elif filterFile == "euclideanFilter":
-        rocEuclidean(location)
+    elif "euclidean" in filterFile :
+        rocEuclidean()
+    else:
+        print("Check filterFile name")
 
 if __name__ == "__main__":
     main()

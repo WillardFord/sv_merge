@@ -177,11 +177,11 @@ class Filter(ABC):
 General Callable Function.
     Calls testFiler or runAllSamples
 """
-def runFilter(filter : Filter, saveFig = False, test = False, verbose = True):
+def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True):
     if test:
         return testFilter(filter, saveFig)
     
-    return runAllSamples(filter, saveFig, verbose)
+    return runAllSamples(filter, saveFig, verbose, inplace)
 
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix 
@@ -219,23 +219,11 @@ def testFilter(filter : Filter, saveFig):
 """
 Load filter on all samples
 """
-def runAllSamples(filter, saveFig = False, verbose = True):
-    """
-    Test filter on all regions for a single sample and return the total number of false positives, 
-        maximum possible, and equivalent for num false negatives
-    """
-
+def runAllSamples(filter, saveFig = False, verbose = True, inplace = True):
     samplePath = "../../output/"
-    dirs = [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]
 
-    inputs = zip(repeat(filter), repeat(saveFig), dirs, repeat(verbose))
-    numCores = 4
-    with Pool(numCores) as p:
-        print("Starting Parallel Compute!")
-        output = p.starmap(runAllRegions, inputs)
-
-    TruePos, TotPos, FalsePos, TotNeg = 0, 0, 0, 0
-    for sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg in output:
+    for sample in [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]:
+        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, inplace)
         TruePos += sampleTruePos
         TotPos += sampleTotPos
         FalsePos += sampleFalsePos
@@ -248,39 +236,37 @@ def runAllSamples(filter, saveFig = False, verbose = True):
     return TruePos, TotPos, FalsePos, TotNeg
 
 """
-Function to run across all regions in parallel
+Function to run across all directories in parallel
 """
-def runAllRegions(filter, saveFig, directory, verbose):
-        badRegions = open("./tmp/badRegions.txt", "w+")
+def runAllRegions(filter, directory, verbose, inplace = True):
+    sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
+    for chrom in os.listdir(directory):
+        chromPath = join(directory, chrom)
+        fastqFiles = [join(chromPath,x) for x in os.listdir(chromPath)]
+        inputs = zip(repeat(filter), fastqFiles, repeat(inplace))
+        numCores = 4
+        with Pool(numCores) as p:
+            outputs = p.starmap(runFilterOnFastq, inputs)
 
-        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
-        for chrom in os.listdir(directory):
-            for fastqFile in os.listdir(join(directory, chrom)):
-                fastqPath = join(directory, chrom, fastqFile)
-                try:
-                    tpr,fpr = runFilterOnFastq(filter, fastqPath)
-                except Exception as e:
-                    badRegions.write(fastqPath + "\n")
-                    continue
+        for tpr, fpr in outputs:
+            truePos, regionTotPos = tpr.split(":")
+            falsePos, regionTotNeg = fpr.split(":")
 
-                truePos, regionTotPos = tpr.split(":")
-                falsePos, regionTotNeg = fpr.split(":")
-
-                sampleTruePos += int(truePos)
-                sampleTotPos += int(regionTotPos)
-                sampleFalsePos += int(falsePos)
-                sampleTotNeg += int(regionTotNeg)
-                if verbose:
-                    print(f"{sampleTruePos}:{sampleTotPos}\t{sampleFalsePos}:{sampleTotNeg}", file = sys.stderr)
+            sampleTruePos += int(truePos)
+            sampleTotPos += int(regionTotPos)
+            sampleFalsePos += int(falsePos)
+            sampleTotNeg += int(regionTotNeg)
             if verbose:
-                print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
-        badRegions.close()
-        return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
+                print(f"{sampleTruePos}:{sampleTotPos}\t{sampleFalsePos}:{sampleTotNeg}", file = sys.stderr)
+
+        if verbose:
+            print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
+    return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
 """
 Run initialized Filter on fastqFile input
 """
-def runFilterOnFastq(filter, fastqFile):
+def runFilterOnFastq(filter, fastqFile, inplace = True):
     """
     Read in reads and labels form a phased fastq file
     """
@@ -309,9 +295,17 @@ def runFilterOnFastq(filter, fastqFile):
     """
     Get Results from loaded filter
     """
-    def runLoadedFilter(filter, saveFig):
+    def runLoadedFilter(filter, saveFig, inplace = True, fastqFile = ""):
         # Filter sequence set
-        filter.processReads()
+        print(fastqFile)
+        characteristicMatrix = filter.processReads()
+
+        # Save characteristic matrix if inplace = "Output Directory for characteristic matricies"
+        if type(inplace) == str:
+            print("Saving characteristic matrix")
+            saveFile = join(inplace, fastqFile.replace(".fastq",""))
+            np.save(saveFile, characteristicMatrix)
+        print("Did this save?")
 
         # Test filtered sequence set and haplotypes
         if saveFig:
@@ -326,7 +320,7 @@ def runFilterOnFastq(filter, fastqFile):
         raise Exception("Not enough seqs")
 
     filter.fill(seqs, labels, fastqFile)
-    return runLoadedFilter(filter, saveFig = False)
+    return runLoadedFilter(filter, saveFig = False, inplace = inplace, fastqFile = fastqFile)
 
 """
 Read in parameters for loading a filter

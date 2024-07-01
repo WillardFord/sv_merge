@@ -43,6 +43,7 @@ class lengthFilter(Filter):
                     self.adjacencyMatrix[i,j] = 1
                 else:
                     self.adjacencyMatrix[i,j] = self.connect(i,j)
+        return self.adjacencyMatrix
 
     '''
     Connect elements with dif(lengths) <= self.threshold.

@@ -40,6 +40,7 @@ class euclideanFilter(Filter):
     def processReads(self):
         self.projectionSignature()
         self.band()
+        return self.signatureMatrix
 
     """
     Generate signatureMatrix of hashs x seqs

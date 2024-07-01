@@ -41,6 +41,8 @@ class hashFilter(Filter):
         for bucket in buckets.values():
                 connectBucket(bucket)
 
+        return self.adjacencyMatrix
+
     def getMinLength(self):
         n = np.inf
         for seq in self.seqs:

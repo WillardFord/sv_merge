@@ -38,6 +38,7 @@ class sketchFilter(Filter):
     def processReads(self):
         self.sketchSignature()
         self.band()
+        return self.signatureMatrix
 
     """
     Generate signatureMatrix of hashs x seqs

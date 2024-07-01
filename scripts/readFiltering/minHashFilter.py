@@ -50,6 +50,7 @@ class minHashFilter(Filter):
     def processReads(self):
         self.minHashSignature()
         self.band()
+        return self.signatureMatrix
 
     """
     Generate signatureMatrix of hashs x seqs
