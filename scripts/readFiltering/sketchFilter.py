@@ -7,11 +7,12 @@ python sketchFilter.py --plot --test --param 1000,3,40
 >> Still experimenting with params in this filter: numHashes,K,bandLength
 TODO: Banding parameters are basically random. We need a better way to choose them.
 """
-import time
+
 from test_filters import Filter, runFilter, readInputs
 import numpy as np
+import math
 
-class euclideanFilter(Filter):
+class sketchFilter(Filter):
     '''
     numHashes:  Number of Hashes to use in signature matrix >= 1000?? 
         Very large, we rely on law of large numbers for correct approximation.
@@ -23,7 +24,7 @@ class euclideanFilter(Filter):
     '''
     def __init__(self, param):
         params = param.split(",")
-        self.numHashes, self.K= int(params[0]), int(params[1])
+        self.numHashes, self.K, self.bandLength = int(params[0]), int(params[1]), int(params[2])
         self.title = f"sketchFilter_numHashes={self.numHashes}_K={self.K}"
 
     '''
@@ -34,64 +35,36 @@ class euclideanFilter(Filter):
     3. Amplify the metric using band method
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
-    def preprocessReads(self):
+    def processReads(self):
         self.sketchSignature()
-        print("Woot")
         self.band()
 
     """
     Generate signatureMatrix of hashs x seqs
-        A hash, in this case, is --
+        A hash, in this case, is a plane.
+        Here we load in a random vector but we'd likely generate one in practice.
     """
     def sketchSignature(self):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
-        for i in range(self.n): # iterate strings
-            for j, line in enumerate(self.getRandomPlanes()):
-                print("Built random line\t\t\t", time.time())
-                characteristicVector = self.getCharacteristicVector(i)
-                print("Built characteristic vector\t\t", time.time())
-                self.signatureMatrix[j,i] = self.sketch(characteristicVector, line)
-                print("Completed one hash\t\t\t", time.time())
-            print("Completed one read")
-        print("Built signatureMatrix!")
+        for i in range(self.n): # iterate reads
+            characteristicVector = self.getCharacteristicVector(i)
+            for j, line in enumerate(self.getRandomPlanes(characteristicVector.shape[0])):
+                if j == self.numHashes:
+                    break
+                self.signatureMatrix[j,i] = math.copysign(1, np.dot(characteristicVector, line))
 
     """
     This function returns a random set of binary vectors in [-1, 1] that describe a plane.
-
-    TODO: takes ~ 6 seconds for k=20 and s=1e-3 --> dimension=(4^20)*s*1.05, 
-        this needs to be basically instant.
     """
-    def getRandomPlanes(self):
-        seed = 1
-        np.random.seed(seed)
-        for _ in range(self.numHashes):
-            orthonormal_line = np.random.choice([1, -1], size=self.m)
-            yield orthonormal_line
+    def getRandomPlanes(self, length):
+        planeFile = "../../output/randomStorage/randPlanes"
+        for row in range(20000):
+            yield np.loadtxt(planeFile, skiprows = row, max_rows = 1, usecols = np.arange(0, length))
 
-    """
-    Returns 1 if dot product is positive, else -1. (0's are randomly assigned)
-    This approximates the cosine distance though is not exact.
-
-    TODO: takes ~1.6 for k=20 and s=1e-3 --> dimension=(4^20)*s*1.05, 
-        this needs to be basically instant
-    """
-    def sketch(self, characterisicVector, plane):
-        value = np.dot(characterisicVector, plane)
-        if value > 0:
-            return 1
-        if value < 0:
-            return -1
-        return np.random.choice([1, -1])
-
-    '''
-    Connect elements in any of the same bucket.
-    '''
-    def connect(self, i, j):
-        self.adjacencyMatrix[i,j]
 
 def main():
     saveFig, param, test = readInputs()
-    filter:euclideanFilter = euclideanFilter(param)
+    filter:sketchFilter = sketchFilter(param)
     runFilter(filter, saveFig, test)
 
 if __name__ == "__main__":

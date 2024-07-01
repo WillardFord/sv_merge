@@ -47,8 +47,7 @@ class minHashFilter(Filter):
     2. Apply MinHashes to Characteristic Matrix
     3. Bin using band method
     '''
-    def preprocessReads(self):
-        self.fracMinHashKmers()
+    def processReads(self):
         self.minHashSignature()
         self.band()
 
@@ -58,15 +57,23 @@ class minHashFilter(Filter):
     """
     def minHashSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
-        rng = np.random.default_rng()
-        hashes = [rng.permutation(self.m) for _ in range(self.numHashes)]
-        for j, kmer in enumerate(self.fracMinHashKmers()):
-            for i in range(self.n): # iterate strings
-                if kmer in self.seqs[i]: # Characteristic Matrix Value
-                    for k, perm in enumerate(hashes):
-                        self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[j])
+        for k, perm in enumerate(self.getHashes()):
+            for i in range(self.n):
+                characteristicVector = self.getCharacteristicVector(i)
+                for kmer in self.kmer_dict.keys():
+                    if characteristicVector[self.kmer_dict[kmer]] > 0:
+                        self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[self.kmer_dict[kmer]])
 
     """
+    Yield random permutations
+    """
+    def getHashes(self):
+        rng = np.random.default_rng(1)
+        for _ in range(self.numHashes):
+            yield rng.permutation(self.m)
+
+    """
+    No longer needed
     Using a subset of the total kmer set allows us to compute much faster. We get this set by using
         Using s = 1000 as suggest default. This allows large k's to be used. (21, 31, 51)
     
@@ -74,33 +81,27 @@ class minHashFilter(Filter):
         from https://www.biorxiv.org/content/10.1101/2022.01.11.475838v2.full.pdf
     """
     def fracMinHashKmers(self, s = 0.5e-2):
+        """
+        Yield all possible kmers without storing them in memory.
+        """
+        def generateKmers(k:int):
+            alphabet = "ACTG"
+            if k == 1:
+                for char in alphabet:
+                    yield char
+            else:
+                for mer in self.generateKmers(k-1):
+                    for char in alphabet:
+                        yield mer + char
+
         maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
         limit = maxVal*s
         kmers = []
-        for kmer in self.generateKmers(self.K):
+        for kmer in generateKmers(self.K):
             if abs(hash(kmer)) < limit:
                 kmers.append(kmer)
         self.m = len(kmers)
         return kmers
-
-    """
-    Yield all possible kmers without storing them in memory.
-    """
-    def generateKmers(self, k:int):
-        alphabet = "ACTG"
-        if k == 1:
-            for char in alphabet:
-                yield char
-        else:
-            for mer in self.generateKmers(k-1):
-                for char in alphabet:
-                    yield mer + char
-
-    '''
-    Connect elements in any of the same bucket.
-    '''
-    def connect(self, i, j):
-        return self.adjacencyMatrix[i,j]
 
 def main():
     saveFig, param, test = readInputs()

@@ -7,7 +7,6 @@ from abc import ABC, abstractmethod
 import sys
 import subprocess
 from collections import defaultdict
-import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,56 +30,56 @@ class Filter(ABC):
         self.seqs = seqs
         self.labels = labels
         self.n :int = len(seqs)
-        self.adjacencyMatrix = np.zeros((self.n, self.n), bool)
+        self.adjacencyMatrix = np.eye(self.n, dtype=bool)
         labelSet = set(self.labels)
         self.firstOcc = [0 for _ in range(len(labelSet))]
         for i, item in enumerate(sorted(labelSet)):
             self.firstOcc[i] = self.labels.index(item)
         self.fastqFile = fastqFile
+        self.minKmerRead = 750
 
-        s = 1e-3
-        maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
-        self.limit = maxVal*s
+        # Don't need 
+        #s = 1e-3
+        #maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
+        #self.limit = maxVal*s
 
-        # Slightly larger to account for non-perfect uniformity of hash function
-        self.m = int(np.power(4, self.K) * s * 1.05)
+        # Largest range of bed region in HG002 dataset
+        self.m = 14156
 
         # Assign each seen kmer a unique index
         self.kmer_dict = dict()
         self.next_kmer_index = 0
 
+        self.characteristicVectors = []
+
     '''
     Preprocess all reads, required for some filters
     '''
     @abstractmethod
-    def preprocessReads(self):
+    def processReads(self):
         pass
-
-    '''
-    Fill out classes based on class filtering method
-    '''
-    @abstractmethod
-    def connect(self, i, j):
-        pass
-
-    '''
-    Build adjacencyMatrix
-    '''
-    def buildAdjacencyMatrix(self):
-        for i in range(self.n):
-            for j in range(self.n):
-                if i == j:
-                    self.adjacencyMatrix[i][j] = True
-                    continue
-                self.adjacencyMatrix[i][j] = self.connect(i,j)
 
     """
     Return the characteristic vector for a single read, i
     """
     def getCharacteristicVector(self, i):
-        characteristicVector = np.zeros(self.m, dtype=np.int16)
+        # We can store all counts vectors in memory for a given region, may not be useful in practice
+        if len(self.characteristicVectors) > i:
+            if len(self.characteristicVectors[i] < self.minKmerRead):
+                # Extend vector if needed
+                self.characteristicVectors[i] = np.concatenate(
+                    (
+                        self.characteristicVectors[i],
+                        np.zeros(
+                            self.minKmerRead - len(self.characteristicVectors[i])
+                        )
+                    ),
+                    axis=0
+                )
+            return self.characteristicVectors[i]
 
-        kmerDir = f"../../output/kmerTables/{int(self.K)}mers"
+        characteristicVector = np.zeros(self.minKmerRead, dtype=np.int16)
+        kmerDir = f"../../output/kmerTables/{int(self.K)}mers" # convert to int to eliminate any trailing 0s
         chrom = os.path.basename(self.fastqFile).split("_")[0]
         regionDir = os.path.join(kmerDir, chrom, os.path.basename(self.fastqFile)[:-6])
         tableFile = os.path.join(regionDir, f"read{i+1}.ktab") # Files are 1-indexed
@@ -95,14 +94,21 @@ class Filter(ABC):
         for row in  table_output.split("\\n")[1:-1]: # First and last line don't contain kmers
             kmer, count = row.strip().split("=")
             kmer = kmer.split(":")[1].strip().upper()
-            if abs(hash(kmer)) < self.limit:
-                count = int(count.strip())
+            #if abs(hash(kmer)) < self.limit: Don't need frac min hash if lazily generating vectors
+            count = int(count.strip())
 
-                # Get kmer index
-                if kmer not in self.kmer_dict:
-                    self.kmer_dict[kmer] = self.next_kmer_index
-                    self.next_kmer_index += 1
-                characteristicVector[self.kmer_dict[kmer]] = count
+            # Get kmer index
+            if kmer not in self.kmer_dict.keys():
+                self.kmer_dict[kmer] = self.next_kmer_index
+                self.next_kmer_index += 1
+            
+            localIndex = self.kmer_dict[kmer]
+            if localIndex >= self.minKmerRead:
+                characteristicVector = np.concatenate((characteristicVector, np.zeros(self.minKmerRead)), axis=0)
+                self.minKmerRead *= 2
+            characteristicVector[localIndex] = count
+
+        self.characteristicVectors.append(characteristicVector)
         return characteristicVector
 
     """
@@ -115,7 +121,7 @@ class Filter(ABC):
                     self.adjacencyMatrix[bucket[i],bucket[j]] = True
                     self.adjacencyMatrix[bucket[j],bucket[i]] = True
 
-        for i in range(self.signatureMatrix.shape[0]//self.bandLength):
+        for i in range(self.numHashes//self.bandLength):
             buckets = defaultdict(list[int])
             startBucket = i*self.bandLength
             endBucket = (i+1)*self.bandLength
@@ -181,9 +187,9 @@ Filter Testing method that saves a heatmap Adjacency Matrix
 def testFilter(filter : Filter, saveFig):
     print(filter.title)
 
-    testDir = "../../output/HG002/chr4/"
+    testDir = "../../output/HG002/chr8/"
     regions = [
-        "chr4_853676-854700.fastq",
+        "chr8_593480-594653.fastq",
     ]
 
     totTruePos, totPos, totFalsePos, totNeg  = 0, 0, 0, 0
@@ -298,8 +304,7 @@ def runFilterOnFastq(filter, fastqFile):
     """
     def runLoadedFilter(filter, saveFig):
         # Filter sequence set
-        filter.preprocessReads()
-        filter.buildAdjacencyMatrix()
+        filter.processReads()
 
         # Test filtered sequence set and haplotypes
         if saveFig:
@@ -334,10 +339,10 @@ def readInputs():
 
 def main():
     print("Testing all filters using default parameters.")
-    filters = [ ("sketchFilter.py",     "1000,20"),
-                ("minHashFilter.py",    "1000,20"),
-                ("euclideanFilter.py",  "1000,20,5,40"),
-                ("lengthFilter.py",     "10"),
+    filters = [ ("sketchFilter.py",     "10,20,4"),
+                ("minHashFilter.py",    "10,20,10"),
+                ("euclideanFilter.py",  "10,20,5,10"),
+                ("lengthFilter.py",     "10,1"),
                 ("hashFilter.py",       "5")
     ]
 

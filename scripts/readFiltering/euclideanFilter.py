@@ -14,10 +14,6 @@ from test_filters import Filter, runFilter, readInputs
 from collections import defaultdict 
 import numpy as np
 
-import re
-import os
-import subprocess
-
 class euclideanFilter(Filter):
     '''
     numHashes:  Number of Hashes to use in signature matrix >= 1000?? 
@@ -42,8 +38,7 @@ class euclideanFilter(Filter):
     3. Amplify the metric using band method
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
-    def preprocessReads(self):
-        self.fracMinHashKmers()
+    def processReads(self):
         self.projectionSignature()
         self.band()
 
@@ -54,25 +49,24 @@ class euclideanFilter(Filter):
     """
     def projectionSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
-        for i in range(self.n): # iterate strings
-            for j, (direction, offset) in enumerate(self.getRandomLines()):
-                charVector = self.getCharacteristicVector(i)
-                self.signatureMatrix[j,i] = self.projectAndBin(charVector, direction, offset)
+        for i in range(self.n): # iterate reads
+            characteristicVector = self.getCharacteristicVector(i)
+            for j, (direction, offset) in enumerate(self.getRandomLines(characteristicVector.shape[0])):
+                if j == self.numHashes:
+                    break
+                self.signatureMatrix[j,i] = self.projectAndBin(characteristicVector, direction, offset)
 
     """
     This function yields a random set of unit lines to use with projection as hash functions
     Uniformly distributed lines on unit hypersphere: 
         https://math.stackexchange.com/questions/444700/uniform-distribution-on-the-surface-of-unit-sphere
     """
-    def getRandomLines(self):
-        seed = 1
-        np.random.seed(seed)
-        dimensions = self.m
-        for _ in range(self.numHashes):
-            s = np.random.normal(0, 1, dimensions)
-            direction = s / np.sqrt(sum(s*s))
-            offset = np.random.uniform(0,5,dimensions)
-            yield direction, offset
+    def getRandomLines(self, length):
+        lineFile = "../../output/randomStorage/randLines"
+        offsetFile = "../../output/randomStorage/randOffsets"
+        for row in range(20000):
+            yield np.loadtxt(lineFile, skiprows = row, max_rows = 1, usecols = np.arange(0, length)), \
+                    np.loadtxt(offsetFile, skiprows = row, max_rows = 1, usecols = 0)
 
     """
     Compute projection of point onto a random line and calculate which bin the point falls into.
@@ -83,12 +77,6 @@ class euclideanFilter(Filter):
         projection = np.dot(line,characteristicVector)*line + offset
         projectedWidth = line[0] * self.binWidth
         return int(projection[0] // projectedWidth)
-
-    """
-    Connect elements in any of the same bucket.
-    """
-    def connect(self, i, j):
-        return self.adjacencyMatrix[i,j]
 
 def main():
     saveFig, param, test = readInputs()
