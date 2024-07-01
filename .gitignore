@@ -40,7 +40,9 @@ scripts/output/*
 *.png
 
 
+# Filtering 
 scripts/readFiltering/__pycache__
 scripts/readFiltering/plots
 data/windows_per_sample_per_chrom_flank_0
 .vscode
+scripts/readFiltering/tmp*
