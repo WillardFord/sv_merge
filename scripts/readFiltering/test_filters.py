@@ -13,6 +13,8 @@ from itertools import repeat
 import matplotlib.pyplot as plt
 import numpy as np
 
+M = 14156
+
 """
 Generic Abstract Class for filtering methods.
 """
@@ -27,7 +29,7 @@ class Filter(ABC):
     self.firstOcc: First occurrence of each label in labels. Used during plotting and calculating metrics.
     self.title: Title for use in plots
     '''
-    def fill(self, seqs, labels, fastqFile):
+    def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None):
         seqs, labels = zip(*sorted(zip(seqs, labels), key = lambda x : x[1]))
         self.seqs = seqs
         self.labels = labels
@@ -40,19 +42,30 @@ class Filter(ABC):
         self.fastqFile = fastqFile
         self.minKmerRead = 750
 
-        # Don't need 
+        # fracMinHash stuff
         #s = 1e-3
         #maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
         #self.limit = maxVal*s
 
         # Largest range of bed region in HG002 dataset
-        self.m = 14156
+        # This is probably still too small as the multiple reads in that location will have different sequences, 
+        #   leading to a higher number of total kmers
+        #   Defined below too, don't assign one without the other.
+        self.m = M
 
         # Assign each seen kmer a unique index
         self.kmer_dict = dict()
         self.next_kmer_index = 0
 
-        self.characteristicVectors = []
+        # Load Euclidean random vectors
+        self.randLines = randLines
+        self.randOffsets = randOffsets
+
+        # Load sketch random vectors
+        self.randPlanes = randPlanes
+        
+
+        # TODO: Load random fracMinHash and sketch
 
     '''
     Preprocess all reads, required for some filters
@@ -65,21 +78,6 @@ class Filter(ABC):
     Return the characteristic vector for a single read, i
     """
     def getCharacteristicVector(self, i):
-        # We can store all counts vectors in memory for a given region, may not be useful in practice
-        if len(self.characteristicVectors) > i:
-            if len(self.characteristicVectors[i] < self.minKmerRead):
-                # Extend vector if needed
-                self.characteristicVectors[i] = np.concatenate(
-                    (
-                        self.characteristicVectors[i],
-                        np.zeros(
-                            self.minKmerRead - len(self.characteristicVectors[i])
-                        )
-                    ),
-                    axis=0
-                )
-            return self.characteristicVectors[i]
-
         characteristicVector = np.zeros(self.minKmerRead, dtype=np.int16)
         kmerDir = f"../../output/kmerTables/{int(self.K)}mers" # convert to int to eliminate any trailing 0s
         chrom = os.path.basename(self.fastqFile).split("_")[0]
@@ -106,11 +104,13 @@ class Filter(ABC):
             
             localIndex = self.kmer_dict[kmer]
             if localIndex >= self.minKmerRead:
-                characteristicVector = np.concatenate((characteristicVector, np.zeros(self.minKmerRead)), axis=0)
+                if self.minKmerRead * 2 > self.m:
+                    addValue = self.m - localIndex
+                else: addValue = self.minKmerRead
+                characteristicVector = np.concatenate((characteristicVector, np.zeros(addValue)), axis=0)
                 self.minKmerRead *= 2
             characteristicVector[localIndex] = count
 
-        self.characteristicVectors.append(characteristicVector)
         return characteristicVector
 
     """
@@ -177,11 +177,11 @@ class Filter(ABC):
 General Callable Function.
     Calls testFiler or runAllSamples
 """
-def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True):
+def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True, loadEuclidean = False, loadSketch = False):
     if test:
         return testFilter(filter, saveFig)
     
-    return runAllSamples(filter, saveFig, verbose, inplace)
+    return runAllSamples(filter, saveFig, verbose, inplace, loadEuclidean = loadEuclidean, loadSketch = loadSketch)
 
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix 
@@ -219,11 +219,42 @@ def testFilter(filter : Filter, saveFig):
 """
 Load filter on all samples
 """
-def runAllSamples(filter, saveFig = False, verbose = True, inplace = True):
-    samplePath = "../../output/"
+def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadEuclidean = False, loadSketch = False):
 
+    m = M
+    if loadEuclidean:
+        lineFile = "../../output/randomStorage/randLines"
+        randLines = np.loadtxt(
+            lineFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = np.arange(0, m)
+        )
+        offsetFile = "../../output/randomStorage/randOffsets"
+        randOffsets = np.loadtxt(
+            offsetFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = 0
+        )
+    else:
+        randLines = None
+        randOffsets = None
+    
+    if loadSketch:
+        planeFile = "../../output/randomStorage/randPlanes"
+        randPlanes = np.loadtxt(
+            planeFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = np.arange(0, m)
+        )
+    else:
+        randPlanes = None
+
+    samplePath = "../../output/"
     for sample in [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]:
-        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, inplace)
+        sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, 
+                                                                                  inplace = inplace,
+                                                                                  randLines = randLines, randOffsets = randOffsets,
+                                                                                  randPlanes = randPlanes)
         TruePos += sampleTruePos
         TotPos += sampleTotPos
         FalsePos += sampleFalsePos
@@ -238,12 +269,17 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True):
 """
 Function to run across all directories in parallel
 """
-def runAllRegions(filter, directory, verbose, inplace = True):
+def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, randOffsets = None, randPlanes = None):
     sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
     for chrom in os.listdir(directory):
+
+        # Build paths
         chromPath = join(directory, chrom)
         fastqFiles = [join(chromPath,x) for x in os.listdir(chromPath)]
-        inputs = zip(repeat(filter), fastqFiles, repeat(inplace))
+
+        # TODO Build framework for sending random hash variables through for sketch and minHash
+        inputs = zip(repeat(filter), fastqFiles, repeat(inplace), repeat(randLines), repeat(randOffsets), repeat(randPlanes))
+
         numCores = 4
         with Pool(numCores) as p:
             outputs = p.starmap(runFilterOnFastq, inputs)
@@ -266,7 +302,7 @@ def runAllRegions(filter, directory, verbose, inplace = True):
 """
 Run initialized Filter on fastqFile input
 """
-def runFilterOnFastq(filter, fastqFile, inplace = True):
+def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOffsets = None, randPlanes = None):
     """
     Read in reads and labels form a phased fastq file
     """
@@ -297,15 +333,12 @@ def runFilterOnFastq(filter, fastqFile, inplace = True):
     """
     def runLoadedFilter(filter, saveFig, inplace = True, fastqFile = ""):
         # Filter sequence set
-        print(fastqFile)
         characteristicMatrix = filter.processReads()
 
         # Save characteristic matrix if inplace = "Output Directory for characteristic matricies"
         if type(inplace) == str:
-            print("Saving characteristic matrix")
-            saveFile = join(inplace, fastqFile.replace(".fastq",""))
+            saveFile = join(inplace, os.path.basename(fastqFile.replace(".fastq","")))
             np.save(saveFile, characteristicMatrix)
-        print("Did this save?")
 
         # Test filtered sequence set and haplotypes
         if saveFig:
@@ -319,7 +352,9 @@ def runFilterOnFastq(filter, fastqFile, inplace = True):
     if len(seqs) == 0:
         raise Exception("Not enough seqs")
 
-    filter.fill(seqs, labels, fastqFile)
+    # TODO add params for sending sketch and minHash random files through
+    filter.fill(seqs, labels, fastqFile, randLines = randLines, randOffsets = randOffsets, randPlanes = randPlanes)
+
     return runLoadedFilter(filter, saveFig = False, inplace = inplace, fastqFile = fastqFile)
 
 """
@@ -340,11 +375,12 @@ def readInputs():
 
 def main():
     print("Testing all filters using default parameters.")
-    filters = [ ("sketchFilter.py",     "10,20,4"),
-                ("minHashFilter.py",    "10,20,10"),
-                ("euclideanFilter.py",  "10,20,5,10"),
-                ("lengthFilter.py",     "10,1"),
-                ("hashFilter.py",       "5")
+    filters = [ 
+        ("sketchFilter.py",     "10,20,4"),
+    #    ("minHashFilter.py",    "10,20,10"),
+        ("euclideanFilter.py",  "10,20,5,10"),
+    #    ("lengthFilter.py",     "10,1"),
+    #     ("hashFilter.py",       "5")
     ]
 
     # Sketch Filter

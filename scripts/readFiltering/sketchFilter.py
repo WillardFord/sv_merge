@@ -49,10 +49,14 @@ class sketchFilter(Filter):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
         for i in range(self.n): # iterate reads
             characteristicVector = self.getCharacteristicVector(i)
-            for j, line in enumerate(self.getRandomPlanes(characteristicVector.shape[0])):
-                if j == self.numHashes:
-                    break
-                self.signatureMatrix[j,i] = math.copysign(1, np.dot(characteristicVector, line))
+            length = characteristicVector.shape[0]
+            for j in range(self.numHashes):
+                if type(self.randPlanes) == np.ndarray:
+                    plane = self.randPlanes[j, 0:length]
+                else:
+                    plane = self.getRandomPlanes(length)
+                self.signatureMatrix[j,i] = math.copysign(1, np.dot(characteristicVector, plane))
+
 
     """
     This function returns a random set of binary vectors in [-1, 1] that describe a plane.

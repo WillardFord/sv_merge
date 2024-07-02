@@ -18,6 +18,7 @@ import csv
 from test_filters import runFilter
 from lengthFilter import lengthFilter
 from euclideanFilter import euclideanFilter
+from sketchFilter import sketchFilter
 
 """
 Calculate area under curve using middle estimate Riemann sum.
@@ -90,7 +91,7 @@ def rocLength(location):
     plotROC(tprs, fprs, location)
 
 """
-Calculate the tprs and fprs of lengthFilter
+Geneate the characteristic matricies of euclideanFilter
 """
 def rocEuclidean():
     characteristicDirectory = "../../output/charMtxs/euclidean"
@@ -100,6 +101,34 @@ def rocEuclidean():
     os.makedirs(outputDirectory, exist_ok=True)
 
     localFilter = euclideanFilter(inputParams)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory, loadEuclidean = True)
+
+"""
+Geneate the characteristic matricies of sketchFilter
+"""
+def rocSketch():
+    characteristicDirectory = "../../output/charMtxs/sketch"
+
+    inputParams =  f"1000,20,40"
+    outputDirectory = os.path.join(characteristicDirectory,inputParams)
+    os.makedirs(outputDirectory, exist_ok=True)
+
+    localFilter = sketchFilter(inputParams)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory, loadSketch = True)
+
+"""
+Geneate the characteristic matricies of minHashFilter
+
+This is still pretty confusing to me
+"""
+def rocMinHash():
+    characteristicDirectory = "../../output/charMtxs/sketch"
+
+    inputParams =  f"1000,20,40"
+    outputDirectory = os.path.join(characteristicDirectory,inputParams)
+    os.makedirs(outputDirectory, exist_ok=True)
+
+    localFilter = sketchFilter(inputParams)
     truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory)
 
 def main():
@@ -110,6 +139,8 @@ def main():
         rocLength(location)
     elif "euclidean" in filterFile :
         rocEuclidean()
+    elif "sketch" in filterFile :
+        rocSketch()
     else:
         print("Check filterFile name")
 

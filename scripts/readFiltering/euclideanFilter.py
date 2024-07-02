@@ -12,6 +12,7 @@ This makes sense theoretically, and explains the variance we were seeing where h
 
 from test_filters import Filter, runFilter, readInputs
 import numpy as np
+import time
 
 class euclideanFilter(Filter):
     '''
@@ -48,12 +49,16 @@ class euclideanFilter(Filter):
         represenation onto a random line.
     """
     def projectionSignature(self):
-        self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
+        self.signatureMatrix = np.zeros((self.numHashes, self.n))
         for i in range(self.n): # iterate reads
             characteristicVector = self.getCharacteristicVector(i)
-            for j, (direction, offset) in enumerate(self.getRandomLines(characteristicVector.shape[0])):
-                if j == self.numHashes:
-                    break
+            length = characteristicVector.shape[0]
+            for j in range(self.numHashes):
+                if type(self.randLines) == np.ndarray:
+                    direction = self.randLines[j, 0:length]
+                    offset = self.randOffsets[j]
+                else:
+                    direction, offset = self.getRandomLines(length)
                 self.signatureMatrix[j,i] = self.projectAndBin(characteristicVector, direction, offset)
 
     """
@@ -64,7 +69,7 @@ class euclideanFilter(Filter):
     def getRandomLines(self, length):
         lineFile = "../../output/randomStorage/randLines"
         offsetFile = "../../output/randomStorage/randOffsets"
-        for row in range(20000):
+        for row in range(self.numHashes):
             yield np.loadtxt(lineFile, skiprows = row, max_rows = 1, usecols = np.arange(0, length)), \
                     np.loadtxt(offsetFile, skiprows = row, max_rows = 1, usecols = 0)
 
