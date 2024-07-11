@@ -96,7 +96,7 @@ Geneate the characteristic matricies of euclideanFilter
 def rocEuclidean():
     characteristicDirectory = "../../output/charMtxs/euclidean"
 
-    inputParams =  f"1000,10,5,1"
+    inputParams =  f"1000,20,5,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
     os.makedirs(outputDirectory, exist_ok=True)
 

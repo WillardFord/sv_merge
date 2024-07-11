@@ -9,11 +9,12 @@ import subprocess
 from collections import defaultdict
 from multiprocessing import Pool
 from itertools import repeat
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-M = 14156
+M = 24000
 
 """
 Generic Abstract Class for filtering methods.
@@ -86,6 +87,9 @@ class Filter(ABC):
 
         # Some regions are too small, don't have haplotypes, or too few reads and led to errors. So table doesn't exist
         if not os.path.isfile(tableFile):
+            with open("./tmp/bad_reads", "a") as f:
+                f.write(tableFile + "\n")
+            return characteristicVector
             raise FileNotFoundError(tableFile)
 
         command = ["Tabex", tableFile, "LIST"]
@@ -249,6 +253,8 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadE
     else:
         randPlanes = None
 
+    TruePos = TotPos = FalsePos = TotNeg = 0
+
     samplePath = "../../output/"
     for sample in [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]:
         sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, 
@@ -271,18 +277,26 @@ Function to run across all directories in parallel
 """
 def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, randOffsets = None, randPlanes = None):
     sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
+    totalTime = 0
     for chrom in os.listdir(directory):
 
         # Build paths
         chromPath = join(directory, chrom)
         fastqFiles = [join(chromPath,x) for x in os.listdir(chromPath)]
 
-        # TODO Build framework for sending random hash variables through for sketch and minHash
+        # TODO Build framework for sending random hash variables through for minHash
         inputs = zip(repeat(filter), fastqFiles, repeat(inplace), repeat(randLines), repeat(randOffsets), repeat(randPlanes))
 
-        numCores = 4
+        start = time.time()
+        print(f"Starting {chrom}\t", start)
+        print(f"Num regions:\t{len(fastqFiles)}")
+        numCores = 128
         with Pool(numCores) as p:
             outputs = p.starmap(runFilterOnFastq, inputs)
+        end = time.time()
+        print(f"Completed {chrom}\t", end)
+        totalTime += end-start
+        print(f"{chrom} time (s):\t", end-start)
 
         for tpr, fpr in outputs:
             truePos, regionTotPos = tpr.split(":")
@@ -297,6 +311,7 @@ def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, 
 
         if verbose:
             print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
+    print("Total compute time:\t", totalTime)
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
 """
@@ -338,7 +353,8 @@ def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOf
         # Save characteristic matrix if inplace = "Output Directory for characteristic matricies"
         if type(inplace) == str:
             saveFile = join(inplace, os.path.basename(fastqFile.replace(".fastq","")))
-            np.save(saveFile, characteristicMatrix)
+            np.save(saveFile, np.insert(characteristicMatrix, 0, filter.labels, axis = 0))
+            print(saveFile)
 
         # Test filtered sequence set and haplotypes
         if saveFig:
@@ -348,8 +364,10 @@ def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOf
         return filter.tpr_fpr()
 
     seqs, labels = readFastq(fastqFile)
-
     if len(seqs) == 0:
+        with open("./tmp/bad_regions", "a") as f:
+            f.write(fastqFile + "\n")
+        return "0:0", "0:0"
         raise Exception("Not enough seqs")
 
     # TODO add params for sending sketch and minHash random files through

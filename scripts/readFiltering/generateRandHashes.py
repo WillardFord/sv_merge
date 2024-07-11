@@ -1,7 +1,7 @@
 import numpy as np
 
 def genRandomPlanes():
-    m = 14156
+    m = 24000
     with open("../../output/randomStorage/randPlanes", "w") as f:
         for _ in range(20000):
             orthonormal_line = np.random.choice(2, size = m)
@@ -10,7 +10,7 @@ def genRandomPlanes():
             f.write('\n')
 
 def genRandomLines():
-    m = 14156
+    m = 24000
     with open("../../output/randomStorage/randLines", "w") as f:
         with open("../../output/randomStorage/randOffsets", "w") as g:
             for _ in range(20000):
@@ -28,5 +28,5 @@ def main():
     genRandomLines()
 
 if __name__ == "__main__":
-    #main() Don't want to accidentally overwrite data
+    main() #Don't want to accidentally overwrite data
     pass

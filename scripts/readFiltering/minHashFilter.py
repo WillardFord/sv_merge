@@ -13,7 +13,9 @@ TODO
     3) We can also compute the kmer counts on the fly, skipping the characteristic matrix all together,
         but it's likely not neccessary for just the python implementation.
 
-
+TODO:
+    1. Fix hashing to not rely on combinations and actually use hashing
+    2. Implement binary representation of sequences so that inputs are uniformly distributed across the input space
 
 python minHashFilter.py --plot --param 1000,13,40
                                     numHashes,K,bandLength
@@ -64,6 +66,7 @@ class minHashFilter(Filter):
                 for kmer in self.kmer_dict.keys():
                     if characteristicVector[self.kmer_dict[kmer]] > 0:
                         self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[self.kmer_dict[kmer]])
+                        
 
     """
     Yield random permutations

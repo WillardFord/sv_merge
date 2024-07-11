@@ -51,7 +51,10 @@ class euclideanFilter(Filter):
     def projectionSignature(self):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
         for i in range(self.n): # iterate reads
-            characteristicVector = self.getCharacteristicVector(i)
+            try:
+                characteristicVector = self.getCharacteristicVector(i)
+            except Exception:
+                continue
             length = characteristicVector.shape[0]
             for j in range(self.numHashes):
                 if type(self.randLines) == np.ndarray:
