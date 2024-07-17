@@ -7,10 +7,11 @@ from abc import ABC, abstractmethod
 import sys
 import subprocess
 from collections import defaultdict
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from itertools import repeat
 import time
 
+from joblib import Parallel, delayed
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -30,7 +31,7 @@ class Filter(ABC):
     self.firstOcc: First occurrence of each label in labels. Used during plotting and calculating metrics.
     self.title: Title for use in plots
     '''
-    def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None):
+    def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
         seqs, labels = zip(*sorted(zip(seqs, labels), key = lambda x : x[1]))
         self.seqs = seqs
         self.labels = labels
@@ -64,6 +65,8 @@ class Filter(ABC):
 
         # Load sketch random vectors
         self.randPlanes = randPlanes
+
+        self.hashes = hashes
         
 
         # TODO: Load random fracMinHash and sketch
@@ -181,11 +184,13 @@ class Filter(ABC):
 General Callable Function.
     Calls testFiler or runAllSamples
 """
-def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True, loadEuclidean = False, loadSketch = False):
+def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True, 
+              loadEuclidean = False, loadSketch = False, loadMinHash = False):
     if test:
         return testFilter(filter, saveFig)
     
-    return runAllSamples(filter, saveFig, verbose, inplace, loadEuclidean = loadEuclidean, loadSketch = loadSketch)
+    return runAllSamples(filter, saveFig, verbose, inplace, 
+                         loadEuclidean = loadEuclidean, loadSketch = loadSketch, loadMinHash = loadMinHash)
 
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix 
@@ -223,7 +228,8 @@ def testFilter(filter : Filter, saveFig):
 """
 Load filter on all samples
 """
-def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadEuclidean = False, loadSketch = False):
+def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, 
+                  loadEuclidean = False, loadSketch = False, loadMinHash = False):
 
     m = M
     if loadEuclidean:
@@ -253,6 +259,20 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadE
     else:
         randPlanes = None
 
+    # TODO this universal hash construction leads to some really weird results.
+    if loadMinHash:
+        numHashes = 2000
+        large_prime = 7919
+        num_buckets = 10000
+        hashes = [0 for _ in range(numHashes)]
+        for i in range(numHashes):
+            a = np.random.randint(1, large_prime - 1)
+            b = np.random.randint(0, large_prime - 1)
+            hashes[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
+
+    else:
+        hashes = None
+
     TruePos = TotPos = FalsePos = TotNeg = 0
 
     samplePath = "../../output/"
@@ -260,7 +280,8 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadE
         sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, 
                                                                                   inplace = inplace,
                                                                                   randLines = randLines, randOffsets = randOffsets,
-                                                                                  randPlanes = randPlanes)
+                                                                                  randPlanes = randPlanes, 
+                                                                                  hashes = hashes)
         TruePos += sampleTruePos
         TotPos += sampleTotPos
         FalsePos += sampleFalsePos
@@ -275,7 +296,8 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, loadE
 """
 Function to run across all directories in parallel
 """
-def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, randOffsets = None, randPlanes = None):
+def runAllRegions(filter, directory, verbose, inplace = True, 
+                  randLines = None, randOffsets = None, randPlanes = None, hashes = None):
     sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg  = 0, 0, 0, 0
     totalTime = 0
     for chrom in os.listdir(directory):
@@ -284,15 +306,20 @@ def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, 
         chromPath = join(directory, chrom)
         fastqFiles = [join(chromPath,x) for x in os.listdir(chromPath)]
 
-        # TODO Build framework for sending random hash variables through for minHash
-        inputs = zip(repeat(filter), fastqFiles, repeat(inplace), repeat(randLines), repeat(randOffsets), repeat(randPlanes))
+        inputs = zip(repeat(filter), fastqFiles, repeat(inplace), repeat(randLines), 
+                     repeat(randOffsets), repeat(randPlanes), repeat(hashes))
+
+        # TODO, change back to all fastqFiles
+        inputs = list(inputs)#[0:2]
+        print(len(inputs))
 
         start = time.time()
         print(f"Starting {chrom}\t", start)
         print(f"Num regions:\t{len(fastqFiles)}")
-        numCores = 128
-        with Pool(numCores) as p:
-            outputs = p.starmap(runFilterOnFastq, inputs)
+        num_cores = cpu_count()
+        outputs = Parallel(n_jobs=num_cores, verbose=1)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o) for \
+                                                        i, j, k, l, m, n, o  in inputs)
+
         end = time.time()
         print(f"Completed {chrom}\t", end)
         totalTime += end-start
@@ -311,13 +338,16 @@ def runAllRegions(filter, directory, verbose, inplace = True, randLines = None, 
 
         if verbose:
             print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
+
+        #TODO: change back to all chroms
+        break
     print("Total compute time:\t", totalTime)
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
 """
 Run initialized Filter on fastqFile input
 """
-def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOffsets = None, randPlanes = None):
+def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
     """
     Read in reads and labels form a phased fastq file
     """
@@ -371,7 +401,7 @@ def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOf
         raise Exception("Not enough seqs")
 
     # TODO add params for sending sketch and minHash random files through
-    filter.fill(seqs, labels, fastqFile, randLines = randLines, randOffsets = randOffsets, randPlanes = randPlanes)
+    filter.fill(seqs, labels, fastqFile, randLines = randLines, randOffsets = randOffsets, randPlanes = randPlanes, hashes = hashes)
 
     return runLoadedFilter(filter, saveFig = False, inplace = inplace, fastqFile = fastqFile)
 
@@ -394,11 +424,11 @@ def readInputs():
 def main():
     print("Testing all filters using default parameters.")
     filters = [ 
-        ("sketchFilter.py",     "10,20,4"),
-    #    ("minHashFilter.py",    "10,20,10"),
-        ("euclideanFilter.py",  "10,20,5,10"),
+    #    ("sketchFilter.py",     "10,20,4"),
+        ("minHashFilter.py",    "1000,20,1"),
+    #    ("euclideanFilter.py",  "10,20,5,10"),
     #    ("lengthFilter.py",     "10,1"),
-    #     ("hashFilter.py",       "5")
+    #    ("hashFilter.py",       "5")
     ]
 
     # Sketch Filter

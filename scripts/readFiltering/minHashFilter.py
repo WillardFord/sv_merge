@@ -38,6 +38,7 @@ class minHashFilter(Filter):
         self.numHashes, self.K = int(params[0]), int(params[1])
         self.bandLength = int(params[2])
         self.title = f"minHashFilter_numHashes={self.numHashes}_K={self.K}"
+        self.hashes = 0
 
     '''
     Preprocess all reads, required for some filters
@@ -60,21 +61,13 @@ class minHashFilter(Filter):
     """
     def minHashSignature(self):
         self.signatureMatrix = np.full((self.numHashes, self.n), np.inf)
-        for k, perm in enumerate(self.getHashes()):
+        for k, perm in enumerate(self.hashes):
+            if k == self.numHashes: break
             for i in range(self.n):
                 characteristicVector = self.getCharacteristicVector(i)
                 for kmer in self.kmer_dict.keys():
-                    if characteristicVector[self.kmer_dict[kmer]] > 0:
-                        self.signatureMatrix[k,i] = min(self.signatureMatrix[k,i], perm[self.kmer_dict[kmer]])
-                        
-
-    """
-    Yield random permutations
-    """
-    def getHashes(self):
-        rng = np.random.default_rng(1)
-        for _ in range(self.numHashes):
-            yield rng.permutation(self.m)
+                    if characteristicVector[self.kmer_dict[kmer]] == 0: continue
+                    self.signatureMatrix[k,i] = min( self.signatureMatrix[k,i], perm(self.kmer_dict[kmer]) )
 
     """
     No longer needed
@@ -110,7 +103,7 @@ class minHashFilter(Filter):
 def main():
     saveFig, param, test = readInputs()
     filter:minHashFilter = minHashFilter(param)
-    runFilter(filter, saveFig, test)
+    runFilter(filter, saveFig, test = False, loadMinHash = True)
 
 if __name__ == "__main__":
     main()
