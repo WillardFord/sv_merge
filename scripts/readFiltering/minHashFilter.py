@@ -46,7 +46,6 @@ class minHashFilter(Filter):
     '''
     def processReads(self, test = False):
         self.buildHashes()
-
         self.minHashSignature(test)
         self.band()
         return self.signatureMatrix
@@ -71,9 +70,11 @@ class minHashFilter(Filter):
         num_buckets = 10000
         large_prime = self.hashes[2]
         numHashes = len(self.hashes[0])
-        hash_functions = [0 for _ in numHashes]
+        hash_functions = [0 for _ in range(numHashes)]
         for i in range(numHashes):
-            hash_functions[i] = lambda x: ((self.hashes[0][i] * x + self.hashes[1][i]) % large_prime) % num_buckets
+            a = self.hashes[0][i]
+            b = self.hashes[1][i]
+            hash_functions[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
         self.hashes = hash_functions
 
 def main():

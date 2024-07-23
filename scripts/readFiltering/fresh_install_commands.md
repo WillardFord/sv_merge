@@ -11,7 +11,7 @@ conda activate sv_merge
 conda install cmake
 conda install compilers # mounted cmake library directories into conda. Not sure if packages are actually useful.
 conda install zlib
-conda install libcurl # Theoretically installed with cmake but needed to install again here, not sure if version difference or something to do with order of installing compilers and cmake
+conda install libcurl # Theoretically installed with cmake but needed to install again here, think its something to do with order of installing compilers and cmake
 conda install autoconf # in pursuit of autoreconf
 conda install jansson
 
@@ -83,12 +83,7 @@ The following NEW packages will be INSTALLED:
   tzdata-2024a-h0c530f3_0
 ```
 
-
-
-## Getting new reads and generating all signature matrices again
-
-
-
+## Getting new reads
 Run from somewhere where gcloud works properly
 Then from `build` directory
 ```
@@ -106,7 +101,7 @@ cd sv_merge/scripts/readFiltering
 ./countKmers.sh # Requires conda environment with fastk, I use a different environment than sv_merge
 ```
 
-Then generate the characteristic matrices.
+## Generating Characteristic Matrices
 Requires a few python packages in a new environment.
 ```
 conda install numpy, matplotlib, joblib
@@ -114,7 +109,9 @@ conda install numpy, matplotlib, joblib
 # Few minutes each
 python generateROC.py euclidean
 python generateROC.py sketch
-python generateROC.py minHash # slightly slower
+
+# Whole day of compute. Python functions struggle to parallelize. Basically lose all optimization on this front
+python generateROC.py minHash
 
 ```
 

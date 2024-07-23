@@ -33,27 +33,24 @@ class Filter(ABC):
     '''
     def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
 
+        # Add basic info
         seqs, labels = zip(*sorted(zip(seqs, labels), key = lambda x : x[1]))
         self.seqs = seqs
         self.labels = labels
         self.n :int = len(seqs)
         self.adjacencyMatrix = np.eye(self.n, dtype=bool)
         labelSet = set(self.labels)
+        self.fastqFile = fastqFile
+
+        # Determines where label change exists
         self.firstOcc = [0 for _ in range(len(labelSet))]
         for i, item in enumerate(sorted(labelSet)):
             self.firstOcc[i] = self.labels.index(item)
-        self.fastqFile = fastqFile
+        
+        # Min size of characteristic vector upon generation. Will lazily add more space if needed
         self.minKmerRead = 750
 
-        # fracMinHash stuff
-        #s = 1e-3
-        #maxVal = 0xFFFFFFFFFFFFFFFF # maximum hashable value on base 64 system.
-        #self.limit = maxVal*s
-
-        # Largest range of bed region in HG002 dataset
-        # This is probably still too small as the multiple reads in that location will have different sequences, 
-        #   leading to a higher number of total kmers
-        #   Defined below too, don't assign one without the other.
+        # Length of random vector to use. Should be at least as large as largest region.
         self.m = M
 
         # Assign each seen kmer a unique index
@@ -64,10 +61,10 @@ class Filter(ABC):
         self.randLines = randLines
         self.randOffsets = randOffsets
 
-        # Load sketch random sketch planes
+        # Load sketch random planes
         self.randPlanes = randPlanes
 
-        # Load random minHash functions
+        # Load minHash random function parameters
         self.hashes = hashes
 
     '''
@@ -229,10 +226,10 @@ def testFilter(filter : Filter, saveFig, loadEuclidean = False, loadSketch = Fal
     if loadMinHash:
         numHashes = 2000
         large_prime = 7919
-        hashes = ([0 for _ in range(numHashes)],[0 for _ in range(numHashes)], large_prime)
+        hashes = ([0 for _ in range(numHashes)], [0 for _ in range(numHashes)], large_prime)
         for i in range(numHashes):
-            hashes[0][i] = np.random.randint(1, large_prime - 1)
-            hashes[1][i] = np.random.randint(0, large_prime - 1)
+            hashes[0].append(np.random.randint(1, large_prime - 1))
+            hashes[1].append(np.random.randint(0, large_prime - 1))
     else:
         hashes = None
 
@@ -271,7 +268,8 @@ def testFilter(filter : Filter, saveFig, loadEuclidean = False, loadSketch = Fal
     return totTruePos, totPos, totFalsePos, totNeg
 
 """
-Load filter on all samples
+Load filter on all samples.
+    Generates random vectors to pass between threads
 """
 def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, 
                   loadEuclidean = False, loadSketch = False, loadMinHash = False):
@@ -304,16 +302,13 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True,
     else:
         randPlanes = None
 
-    # TODO this universal hash construction leads to some really weird results.
     if loadMinHash:
         numHashes = 2000
         large_prime = 7919
-        num_buckets = 10000
-        hashes = [0 for _ in range(numHashes)]
+        hashes = ([0 for _ in range(numHashes)], [0 for _ in range(numHashes)], large_prime)
         for i in range(numHashes):
-            a = np.random.randint(1, large_prime - 1)
-            b = np.random.randint(0, large_prime - 1)
-            hashes[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
+            hashes[0].append(np.random.randint(1, large_prime - 1))
+            hashes[1].append(np.random.randint(0, large_prime - 1))
     else:
         hashes = None
 
@@ -338,7 +333,7 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True,
     return TruePos, TotPos, FalsePos, TotNeg
 
 """
-Function to run across all directories in parallel
+Function to run across all regions in parallel. Does each chromosome one at a time.
 """
 def runAllRegions(filter, directory, verbose, inplace = True, 
                   randLines = None, randOffsets = None, randPlanes = None, hashes = None):
@@ -353,31 +348,29 @@ def runAllRegions(filter, directory, verbose, inplace = True,
         inputs = zip(repeat(filter), fastqFiles, repeat(False), repeat(inplace), repeat(randLines), 
                      repeat(randOffsets), repeat(randPlanes), repeat(hashes), repeat(False))
 
-        start = time.time()
         print(f"Starting {chrom}\t", start)
         print(f"Num regions:\t{len(fastqFiles)}")
+
+        start = time.time()
         num_cores = cpu_count()
         outputs = Parallel(n_jobs=num_cores, verbose=1)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o, p, q) for \
                                                         i, j, k, l, m, n, o, p, q  in inputs)
-
         end = time.time()
+        chromTime += end-start
+        totalTime += chromTime
+
         print(f"Completed {chrom}\t", end)
-        totalTime += end-start
-        print(f"{chrom} time (s):\t", end-start)
+        print(f"{chrom} time (s):\t", chromTime)
 
         for tpr, fpr in outputs:
             truePos, regionTotPos = tpr.split(":")
             falsePos, regionTotNeg = fpr.split(":")
-
             sampleTruePos += int(truePos)
             sampleTotPos += int(regionTotPos)
             sampleFalsePos += int(falsePos)
             sampleTotNeg += int(regionTotNeg)
             if verbose:
                 print(f"{sampleTruePos}:{sampleTotPos}\t{sampleFalsePos}:{sampleTotNeg}", file = sys.stderr)
-
-        if verbose:
-            print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
 
     print("Total compute time:\t", totalTime)
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
@@ -473,7 +466,6 @@ def main():
     #    ("hashFilter.py",       "5")
     ]
 
-    # Sketch Filter
     command = ["python", "___", "--test" ,"--param", "____", "--plot"]
     for filterFile, params in filters:
         print("Testing:", filterFile)

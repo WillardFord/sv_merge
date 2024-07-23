@@ -106,6 +106,7 @@ def rocLengthTest():
         if truePos == allPos:
             break
 
+    # Percentage of size based difference
     for i in np.arange(0, 100, 1/5):
         inputParams =  f"1,{i}"
         localFilter = lengthFilter(inputParams)
@@ -120,13 +121,18 @@ Geneate the characteristic matricies of euclideanFilter
 """
 def rocEuclidean():
     characteristicDirectory = "../../output/signatureMtxs_20bp/euclidean"
+    # Test a range of bin sizes for assigning projected values
     for i in range(1,21):
         inputParams =  f"1000,21,{i},1"
         outputDirectory = os.path.join(characteristicDirectory,inputParams)
-        os.makedirs(outputDirectory, exist_ok=True)
 
+        if os.path.isdir(outputDirectory):
+            print(f"Path already exists\t{outputDirectory}")
+            continue
+
+        os.makedirs(outputDirectory, exist_ok=True)
         localFilter = euclideanFilter(inputParams)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory, loadEuclidean = True)
+        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False, inplace = outputDirectory, loadEuclidean = True)
 
 """
 Geneate the characteristic matricies of sketchFilter
@@ -136,15 +142,18 @@ def rocSketch():
 
     inputParams =  f"1000,21,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
+
+    if os.path.isdir(outputDirectory):
+        print(f"Path already exists\t{outputDirectory}")
+        return
+
     os.makedirs(outputDirectory, exist_ok=True)
 
     localFilter = sketchFilter(inputParams)
-    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory, loadSketch = True)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False, inplace = outputDirectory, loadSketch = True)
 
 """
 Geneate the characteristic matricies of minHashFilter
-
-This is still pretty confusing to me
 """
 def rocMinHash():
     # TODO First one was to charMtxs/sketch on accident, fix when completed running
@@ -152,10 +161,15 @@ def rocMinHash():
 
     inputParams =  f"1000,21,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
+
+    if os.path.isdir(outputDirectory):
+        print(f"Path already exists\t{outputDirectory}")
+        return
+
     os.makedirs(outputDirectory, exist_ok=True)
 
     localFilter = minHashFilter(inputParams)
-    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = True, inplace = outputDirectory, loadMinHash = True)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False, inplace = outputDirectory, loadMinHash = True)
 
 def main():
     filterFile = sys.argv[1]
