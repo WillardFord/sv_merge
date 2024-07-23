@@ -3,12 +3,10 @@
 # Split a fastq file into reads with haplotypes
 split_fastq() {
     local input_fastq="$1"
-
     local output_directory=$(get_output $input_fastq)
 
     mkdir -p "$output_directory"
     declare -a reads_with_numbers
-
     # Read 4 lines at a time from the input FASTQ file
     while IFS= read -r line1 && IFS= read -r line2 && IFS= read -r line3 && IFS= read -r line4; do
         # Only take lines that have assigned haplotypes
@@ -20,7 +18,6 @@ split_fastq() {
 
     # Perform stable sort based on the extracted number
     IFS=$'\n' sorted_reads=($(sort -t '|' -k1 -s -n <<<"${reads_with_numbers[*]}"))
-
 
     local count=0
     for read_info in "${sorted_reads[@]}"; do
@@ -39,30 +36,24 @@ split_fastq() {
 # Get output directory
 get_output() {
     local input_fastq="$1"
-    local fileName="$(basename $input_fastq)"
-    local chrName="$(basename $(dirname $input_fastq))"
-    local sampleName="$(basename $(dirname $(dirname $input_fastq)))"
+    local file_name="$(basename $input_fastq)"
+    local chr_name="$(basename $(dirname $input_fastq))"
+    local sample_name="$(basename $(dirname $(dirname $input_fastq)))"
     
-    local suffix="$sampleName"/"$chrName"/"$fileName"
-    local prefix=${input_fastq:0:38}
-
-    string='Hello world!';
+    local suffix="$sample_name"/"$chr_name"/"$file_name"
+    local prefix=${input_fastq:0:12}
 
     local output_directory="$prefix"/splitFastqs/"$suffix"
     output_directory="${output_directory%.*}"
     echo $output_directory
 }
 
-sample_dir=/Users/wford/Documents/sv_merge/output/HG002
+sample_dir=../../output/HG002_20bp
 for chrom_dir in $(ls $sample_dir); do
     for fastq in $(ls "$sample_dir"/"$chrom_dir"); do
         input_fastq="$sample_dir"/"$chrom_dir"/"$fastq"
-        output_dir=$(get_output $input_fastq)
 
-        split_fastq "$input_fastq" "$output_directory"
+        split_fastq "$input_fastq" &
     done
     echo "Completed" $chrom_dir
 done
-
-
-

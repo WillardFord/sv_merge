@@ -29,7 +29,7 @@ class lengthFilter(Filter):
     '''
     Preprocess all reads, required for some filters
     '''
-    def processReads(self):
+    def processReads(self, test = False):
         # Set max length
         if self.percent:
             self.maxLength = 0

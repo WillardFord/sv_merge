@@ -12,7 +12,6 @@ This makes sense theoretically, and explains the variance we were seeing where h
 
 from test_filters import Filter, runFilter, readInputs
 import numpy as np
-import time
 
 class euclideanFilter(Filter):
     '''
@@ -38,7 +37,7 @@ class euclideanFilter(Filter):
     3. Amplify the metric using band method
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
-    def processReads(self):
+    def processReads(self, test = False):
         self.projectionSignature()
         self.band()
         return self.signatureMatrix
@@ -51,30 +50,12 @@ class euclideanFilter(Filter):
     def projectionSignature(self):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
         for i in range(self.n): # iterate reads
-            try:
-                characteristicVector = self.getCharacteristicVector(i)
-            except Exception:
-                continue
+            characteristicVector = self.getCharacteristicVector(i)
             length = characteristicVector.shape[0]
             for j in range(self.numHashes):
-                if type(self.randLines) == np.ndarray:
-                    direction = self.randLines[j, 0:length]
-                    offset = self.randOffsets[j]
-                else:
-                    direction, offset = self.getRandomLines(length)
+                direction = self.randLines[j, 0:length]
+                offset = self.randOffsets[j]
                 self.signatureMatrix[j,i] = self.projectAndBin(characteristicVector, direction, offset)
-
-    """
-    This function yields a random set of unit lines to use with projection as hash functions
-    Uniformly distributed lines on unit hypersphere: 
-        https://math.stackexchange.com/questions/444700/uniform-distribution-on-the-surface-of-unit-sphere
-    """
-    def getRandomLines(self, length):
-        lineFile = "../../output/randomStorage/randLines"
-        offsetFile = "../../output/randomStorage/randOffsets"
-        for row in range(self.numHashes):
-            yield np.loadtxt(lineFile, skiprows = row, max_rows = 1, usecols = np.arange(0, length)), \
-                    np.loadtxt(offsetFile, skiprows = row, max_rows = 1, usecols = 0)
 
     """
     Compute projection of point onto a random line and calculate which bin the point falls into.

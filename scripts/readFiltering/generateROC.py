@@ -119,10 +119,9 @@ def rocLengthTest():
 Geneate the characteristic matricies of euclideanFilter
 """
 def rocEuclidean():
-    characteristicDirectory = "../../output/signatureMtxs/euclidean"
+    characteristicDirectory = "../../output/signatureMtxs_20bp/euclidean"
     for i in range(1,21):
-        if i == 5: continue
-        inputParams =  f"1000,20,{i},1"
+        inputParams =  f"1000,21,{i},1"
         outputDirectory = os.path.join(characteristicDirectory,inputParams)
         os.makedirs(outputDirectory, exist_ok=True)
 
@@ -133,9 +132,9 @@ def rocEuclidean():
 Geneate the characteristic matricies of sketchFilter
 """
 def rocSketch():
-    characteristicDirectory = "../../output/signatureMtxs/sketch"
+    characteristicDirectory = "../../output/signatureMtxs_20bp/sketch"
 
-    inputParams =  f"1000,20,40"
+    inputParams =  f"1000,21,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
     os.makedirs(outputDirectory, exist_ok=True)
 
@@ -149,9 +148,9 @@ This is still pretty confusing to me
 """
 def rocMinHash():
     # TODO First one was to charMtxs/sketch on accident, fix when completed running
-    characteristicDirectory = "../../output/signatureMtxs/minHash" 
+    characteristicDirectory = "../../output/signatureMtxs_20bp/minHash" 
 
-    inputParams =  f"1000,20,40"
+    inputParams =  f"1000,21,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
     os.makedirs(outputDirectory, exist_ok=True)
 

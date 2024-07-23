@@ -21,7 +21,7 @@ class hashFilter(Filter):
     '''
     Preprocess all reads, required for some filters
     '''
-    def processReads(self):
+    def processReads(self, test = False):
         def connectBucket(bucket):
             for i in range(len(bucket)-1):
                 for j in range(i+1, len(bucket)):

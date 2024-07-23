@@ -32,6 +32,7 @@ class Filter(ABC):
     self.title: Title for use in plots
     '''
     def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
+
         seqs, labels = zip(*sorted(zip(seqs, labels), key = lambda x : x[1]))
         self.seqs = seqs
         self.labels = labels
@@ -63,13 +64,11 @@ class Filter(ABC):
         self.randLines = randLines
         self.randOffsets = randOffsets
 
-        # Load sketch random vectors
+        # Load sketch random sketch planes
         self.randPlanes = randPlanes
 
+        # Load random minHash functions
         self.hashes = hashes
-        
-
-        # TODO: Load random fracMinHash and sketch
 
     '''
     Preprocess all reads, required for some filters
@@ -83,7 +82,7 @@ class Filter(ABC):
     """
     def getCharacteristicVector(self, i):
         characteristicVector = np.zeros(self.minKmerRead, dtype=np.int16)
-        kmerDir = f"../../output/kmerTables/{int(self.K)}mers" # convert to int to eliminate any trailing 0s
+        kmerDir = f"../../output/kmerTables_20bp/{int(self.K)}mers" # convert to int to eliminate any trailing 0s
         chrom = os.path.basename(self.fastqFile).split("_")[0]
         regionDir = os.path.join(kmerDir, chrom, os.path.basename(self.fastqFile)[:-6])
         tableFile = os.path.join(regionDir, f"read{i+1}.ktab") # Files are 1-indexed
@@ -143,6 +142,7 @@ class Filter(ABC):
     Plot adjacencyMatrix
     '''
     def plotAdjacencyMatrix(self, outDir = "../../output/plots"):
+        os.makedirs(outDir, exist_ok = True)
         plt.imshow(self.adjacencyMatrix, 
                    cmap = 'binary_r', 
                    interpolation='nearest', 
@@ -187,7 +187,7 @@ General Callable Function.
 def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, inplace = True, 
               loadEuclidean = False, loadSketch = False, loadMinHash = False):
     if test:
-        return testFilter(filter, saveFig)
+        return testFilter(filter, saveFig, loadEuclidean = loadEuclidean, loadSketch = loadSketch, loadMinHash = loadMinHash)
     
     return runAllSamples(filter, saveFig, verbose, inplace, 
                          loadEuclidean = loadEuclidean, loadSketch = loadSketch, loadMinHash = loadMinHash)
@@ -195,41 +195,8 @@ def runFilter(filter : Filter, saveFig = False, test = False, verbose = True, in
 '''
 Filter Testing method that saves a heatmap Adjacency Matrix 
 '''
-def testFilter(filter : Filter, saveFig):
+def testFilter(filter : Filter, saveFig, loadEuclidean = False, loadSketch = False, loadMinHash = False):
     print(filter.title)
-
-    testDir = "../../output/HG002/chr8/"
-    regions = [
-        "chr8_593480-594653.fastq",
-    ]
-
-    totTruePos, totPos, totFalsePos, totNeg  = 0, 0, 0, 0
-
-    for region in regions:
-        fastqFile = join(testDir, region)
-
-        tpr,fpr = runFilterOnFastq(filter, fastqFile)
-        if tpr == fpr and fpr == 0:
-            continue
-
-        truePos, regionTotPos = tpr.split(":")
-        falsePos, regionTotNeg = fpr.split(":")
-
-        totTruePos += int(truePos)
-        totPos += int(regionTotPos)
-        totFalsePos += int(falsePos)
-        totNeg += int(regionTotNeg)
-    
-    print(f"{totTruePos}:{totPos}\t{totFalsePos}:{totNeg}")
-    print(f"TPR:\t{totTruePos/totPos}\nFPR:\t{totFalsePos/totNeg}" ,file = sys.stderr)
-
-    return totTruePos, totPos, totFalsePos, totNeg
-
-"""
-Load filter on all samples
-"""
-def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, 
-                  loadEuclidean = False, loadSketch = False, loadMinHash = False):
 
     m = M
     if loadEuclidean:
@@ -269,14 +236,94 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True,
             a = np.random.randint(1, large_prime - 1)
             b = np.random.randint(0, large_prime - 1)
             hashes[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
+    else:
+        hashes = None
 
+    print("Loaded hashes")
+
+    testDir = "../../output/HG002/chr8/"
+    regions = [
+        "chr8_593480-594653.fastq",
+    ]
+
+    totTruePos, totPos, totFalsePos, totNeg  = 0, 0, 0, 0
+
+    for region in regions:
+        fastqFile = join(testDir, region)
+
+        tpr, fpr = runFilterOnFastq(filter, fastqFile, verbose = True, test = True, 
+                                  inplace = False, 
+                                  randLines = randLines, randOffsets = randOffsets, 
+                                  randPlanes = randPlanes, 
+                                  hashes = hashes
+        )
+        if tpr == fpr and fpr == 0:
+            continue
+
+        truePos, regionTotPos = tpr.split(":")
+        falsePos, regionTotNeg = fpr.split(":")
+
+        totTruePos += int(truePos)
+        totPos += int(regionTotPos)
+        totFalsePos += int(falsePos)
+        totNeg += int(regionTotNeg)
+    
+    print(f"{totTruePos}:{totPos}\t{totFalsePos}:{totNeg}")
+    print(f"TPR:\t{totTruePos/totPos}\nFPR:\t{totFalsePos/totNeg}" ,file = sys.stderr)
+
+    return totTruePos, totPos, totFalsePos, totNeg
+
+"""
+Load filter on all samples
+"""
+def runAllSamples(filter, saveFig = False, verbose = True, inplace = True, 
+                  loadEuclidean = False, loadSketch = False, loadMinHash = False):
+
+    m = M
+    if loadEuclidean:
+        lineFile = "../../output/randomStorage/randLines"
+        randLines = np.loadtxt(
+            lineFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = np.arange(0, m)
+        )
+        offsetFile = "../../output/randomStorage/randOffsets"
+        randOffsets = np.loadtxt(
+            offsetFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = 0
+        )
+    else:
+        randLines = None
+        randOffsets = None
+
+    if loadSketch:
+        planeFile = "../../output/randomStorage/randPlanes"
+        randPlanes = np.loadtxt(
+            planeFile, 
+            skiprows = 0, max_rows = filter.numHashes, 
+            usecols = np.arange(0, m)
+        )
+    else:
+        randPlanes = None
+
+    # TODO this universal hash construction leads to some really weird results.
+    if loadMinHash:
+        numHashes = 2000
+        large_prime = 7919
+        num_buckets = 10000
+        hashes = [0 for _ in range(numHashes)]
+        for i in range(numHashes):
+            a = np.random.randint(1, large_prime - 1)
+            b = np.random.randint(0, large_prime - 1)
+            hashes[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
     else:
         hashes = None
 
     TruePos = TotPos = FalsePos = TotNeg = 0
 
     samplePath = "../../output/"
-    for sample in [join(samplePath, x) for x in os.listdir(samplePath) if x.startswith("HG") and "733" not in x]:
+    for sample in [join(samplePath, "HG002_20bp")]:
         sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg = runAllRegions(filter, sample, verbose, 
                                                                                   inplace = inplace,
                                                                                   randLines = randLines, randOffsets = randOffsets,
@@ -306,19 +353,15 @@ def runAllRegions(filter, directory, verbose, inplace = True,
         chromPath = join(directory, chrom)
         fastqFiles = [join(chromPath,x) for x in os.listdir(chromPath)]
 
-        inputs = zip(repeat(filter), fastqFiles, repeat(inplace), repeat(randLines), 
-                     repeat(randOffsets), repeat(randPlanes), repeat(hashes))
-
-        # TODO, change back to all fastqFiles
-        inputs = list(inputs)#[0:2]
-        print(len(inputs))
+        inputs = zip(repeat(filter), fastqFiles, repeat(False), repeat(inplace), repeat(randLines), 
+                     repeat(randOffsets), repeat(randPlanes), repeat(hashes), repeat(False))
 
         start = time.time()
         print(f"Starting {chrom}\t", start)
         print(f"Num regions:\t{len(fastqFiles)}")
         num_cores = cpu_count()
-        outputs = Parallel(n_jobs=num_cores, verbose=1)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o) for \
-                                                        i, j, k, l, m, n, o  in inputs)
+        outputs = Parallel(n_jobs=num_cores, verbose=1)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o, p, q) for \
+                                                        i, j, k, l, m, n, o, p, q  in inputs)
 
         end = time.time()
         print(f"Completed {chrom}\t", end)
@@ -339,15 +382,16 @@ def runAllRegions(filter, directory, verbose, inplace = True,
         if verbose:
             print(f"Completed\t{join(directory, chrom)}", file=sys.stderr)
 
-        #TODO: change back to all chroms
-        break
     print("Total compute time:\t", totalTime)
     return sampleTruePos, sampleTotPos, sampleFalsePos, sampleTotNeg
 
 """
 Run initialized Filter on fastqFile input
+inplace indicates to save the signature matrix
+
+rand___ and hashes are all preloaded values reused across every thread and passed between filters. Only generated once.
 """
-def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
+def runFilterOnFastq(filter, fastqFile, test = False, inplace = True, randLines = None, randOffsets = None, randPlanes = None, hashes = None, verbose = False):
     """
     Read in reads and labels form a phased fastq file
     """
@@ -376,15 +420,15 @@ def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOf
     """
     Get Results from loaded filter
     """
-    def runLoadedFilter(filter, saveFig, inplace = True, fastqFile = ""):
+    def runLoadedFilter(filter, saveFig, inplace = True, fastqFile = "", test = False):
         # Filter sequence set
-        characteristicMatrix = filter.processReads()
+        characteristicMatrix = filter.processReads(test = test)
 
         # Save characteristic matrix if inplace = "Output Directory for characteristic matricies"
         if type(inplace) == str:
             saveFile = join(inplace, os.path.basename(fastqFile.replace(".fastq","")))
             np.save(saveFile, np.insert(characteristicMatrix, 0, filter.labels, axis = 0))
-            print(saveFile)
+            #print(saveFile)
 
         # Test filtered sequence set and haplotypes
         if saveFig:
@@ -400,10 +444,11 @@ def runFilterOnFastq(filter, fastqFile, inplace = True, randLines = None, randOf
         return "0:0", "0:0"
         raise Exception("Not enough seqs")
 
-    # TODO add params for sending sketch and minHash random files through
     filter.fill(seqs, labels, fastqFile, randLines = randLines, randOffsets = randOffsets, randPlanes = randPlanes, hashes = hashes)
 
-    return runLoadedFilter(filter, saveFig = False, inplace = inplace, fastqFile = fastqFile)
+    if verbose: print("Filter loaded, running filtering process")
+
+    return runLoadedFilter(filter, saveFig = False, inplace = inplace, fastqFile = fastqFile, test = test)
 
 """
 Read in parameters for loading a filter
@@ -432,7 +477,7 @@ def main():
     ]
 
     # Sketch Filter
-    command = ["python", "", "--test" ,"--param", ""]
+    command = ["python", "___", "--test" ,"--param", "____", "--plot"]
     for filterFile, params in filters:
         print("Testing:", filterFile)
         command[1] = filterFile

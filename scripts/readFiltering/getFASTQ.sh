@@ -1,12 +1,13 @@
 #!/bin/bash
 
-BED_DIR="../../output/hg002_beds"
+BED_DIR="../output/hg002_beds/"
+export GCS_OAUTH_TOKEN=$(gcloud auth print-access-token)
 
 for sample in HG002
 do
     for i in $(seq 1 22);
     do
-        OUTPUTDIR="../output/$sample/chr$i"
+        OUTPUTDIR="../output/"$sample"_20bp/chr$i"
         BED="$BED_DIR"chr"$i".bed""
         BAM="gs://fc-28761d6c-5677-4941-86e7-6e42b59a27f4/willard/"$sample"/"$sample"_haplotagged.bam "
         echo $BAM
@@ -17,7 +18,7 @@ do
             --bed $BED \
             --output_dir $OUTPUTDIR \
             --flank_length 200 \
-            --n_threads 4 \
+            --n_threads 1 \
             --require_spanning \
             --tags PS,HP \
             --force_forward

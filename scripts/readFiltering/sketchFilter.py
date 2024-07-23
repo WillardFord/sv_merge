@@ -35,8 +35,8 @@ class sketchFilter(Filter):
     3. Amplify the metric using band method
         TODO: Formal analysis of the effect of AND/OR gates used here.
     '''
-    def processReads(self):
-        self.sketchSignature()
+    def processReads(self, test = False):
+        self.sketchSignature(test)
         self.band()
         return self.signatureMatrix
 
@@ -45,27 +45,14 @@ class sketchFilter(Filter):
         A hash, in this case, is a plane.
         Here we load in a random vector but we'd likely generate one in practice.
     """
-    def sketchSignature(self):
+    def sketchSignature(self, test):
         self.signatureMatrix = np.zeros((self.numHashes, self.n))
         for i in range(self.n): # iterate reads
             characteristicVector = self.getCharacteristicVector(i)
             length = characteristicVector.shape[0]
             for j in range(self.numHashes):
-                if type(self.randPlanes) == np.ndarray:
-                    plane = self.randPlanes[j, 0:length]
-                else:
-                    plane = self.getRandomPlanes(length)
+                plane = self.randPlanes[j, 0:length]
                 self.signatureMatrix[j,i] = math.copysign(1, np.dot(characteristicVector, plane))
-
-
-    """
-    This function returns a random set of binary vectors in [-1, 1] that describe a plane.
-    """
-    def getRandomPlanes(self, length):
-        planeFile = "../../output/randomStorage/randPlanes"
-        for row in range(20000):
-            yield np.loadtxt(planeFile, skiprows = row, max_rows = 1, usecols = np.arange(0, length))
-
 
 def main():
     saveFig, param, test = readInputs()
