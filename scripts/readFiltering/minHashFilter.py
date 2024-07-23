@@ -45,6 +45,8 @@ class minHashFilter(Filter):
     2. Bin using band method
     '''
     def processReads(self, test = False):
+        self.buildHashes()
+
         self.minHashSignature(test)
         self.band()
         return self.signatureMatrix
@@ -61,6 +63,18 @@ class minHashFilter(Filter):
                 for kmer in self.kmer_dict.keys():
                     if characteristicVector[self.kmer_dict[kmer]] == 0: continue
                     self.signatureMatrix[k,i] = min( self.signatureMatrix[k,i], univ_hash(self.kmer_dict[kmer]) )
+
+    """
+    Build hashes from random inputs
+    """
+    def buildHashes(self):
+        num_buckets = 10000
+        large_prime = self.hashes[2]
+        numHashes = len(self.hashes[0])
+        hash_functions = [0 for _ in numHashes]
+        for i in range(numHashes):
+            hash_functions[i] = lambda x: ((self.hashes[0][i] * x + self.hashes[1][i]) % large_prime) % num_buckets
+        self.hashes = hash_functions
 
 def main():
     saveFig, param, test = readInputs()

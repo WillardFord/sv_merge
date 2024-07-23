@@ -111,8 +111,11 @@ Requires a few python packages in a new environment.
 ```
 conda install numpy, matplotlib, joblib
 
+# Few minutes each
 python generateROC.py euclidean
 python generateROC.py sketch
+python generateROC.py minHash # slightly slower
+
 ```
 
 

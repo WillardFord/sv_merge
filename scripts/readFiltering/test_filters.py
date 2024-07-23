@@ -226,16 +226,13 @@ def testFilter(filter : Filter, saveFig, loadEuclidean = False, loadSketch = Fal
     else:
         randPlanes = None
 
-    # TODO this universal hash construction leads to some really weird results.
     if loadMinHash:
         numHashes = 2000
         large_prime = 7919
-        num_buckets = 10000
-        hashes = [0 for _ in range(numHashes)]
+        hashes = ([0 for _ in range(numHashes)],[0 for _ in range(numHashes)], large_prime)
         for i in range(numHashes):
-            a = np.random.randint(1, large_prime - 1)
-            b = np.random.randint(0, large_prime - 1)
-            hashes[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
+            hashes[0][i] = np.random.randint(1, large_prime - 1)
+            hashes[1][i] = np.random.randint(0, large_prime - 1)
     else:
         hashes = None
 
