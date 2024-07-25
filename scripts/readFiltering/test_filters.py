@@ -21,7 +21,7 @@ M = 24000
 Generic Abstract Class for filtering methods.
 """
 class Filter(ABC):
-    '''
+    """
     Load all class fields.
 
     seqs: length n list of sequences
@@ -30,7 +30,7 @@ class Filter(ABC):
     self.n
     self.firstOcc: First occurrence of each label in labels. Used during plotting and calculating metrics.
     self.title: Title for use in plots
-    '''
+    """
     def fill(self, seqs, labels, fastqFile, randLines = None, randOffsets = None, randPlanes = None, hashes = None):
 
         # Add basic info
@@ -67,9 +67,9 @@ class Filter(ABC):
         # Load minHash random function parameters
         self.hashes = hashes
 
-    '''
+    """
     Preprocess all reads, required for some filters
-    '''
+    """
     @abstractmethod
     def processReads(self):
         pass
@@ -135,9 +135,9 @@ class Filter(ABC):
             for bucket in buckets.values():
                 connectBucket(bucket)
 
-    '''
+    """
     Plot adjacencyMatrix
-    '''
+    """
     def plotAdjacencyMatrix(self, outDir = "../../output/plots"):
         os.makedirs(outDir, exist_ok = True)
         plt.imshow(self.adjacencyMatrix, 
@@ -159,11 +159,11 @@ class Filter(ABC):
         print(f"Saving at {saveLocation}", file = sys.stderr)
         plt.savefig(saveLocation)
 
-    '''
+    """
     Return tuple (true positive rate, false positive rate)
     tpr - sum of all connections in the clusters where connections should exist over that total space
     fpr - equivalently for connections that shouldn't exist
-    '''
+    """
     def tpr_fpr(self):
         trueMask = np.zeros((self.n, self.n), dtype = bool)
         for i in range(0, len(self.firstOcc)-1):
@@ -305,10 +305,11 @@ def runAllSamples(filter, saveFig = False, verbose = True, inplace = True,
     if loadMinHash:
         numHashes = 2000
         large_prime = 7919
-        hashes = ([0 for _ in range(numHashes)], [0 for _ in range(numHashes)], large_prime)
-        for i in range(numHashes):
-            hashes[0].append(np.random.randint(1, large_prime - 1))
-            hashes[1].append(np.random.randint(0, large_prime - 1))
+        hashes = (
+            np.random.randint(1, high = large_prime - 1, size = numHashes), 
+            np.random.randint(0, high = large_prime - 1, size = numHashes), 
+            large_prime
+        )
     else:
         hashes = None
 
@@ -348,19 +349,19 @@ def runAllRegions(filter, directory, verbose, inplace = True,
         inputs = zip(repeat(filter), fastqFiles, repeat(False), repeat(inplace), repeat(randLines), 
                      repeat(randOffsets), repeat(randPlanes), repeat(hashes), repeat(False))
 
-        print(f"Starting {chrom}\t", start)
-        print(f"Num regions:\t{len(fastqFiles)}")
-
+        if verbose:
+            print(f"Starting {chrom}\t")
+            print(f"Num regions:\t{len(fastqFiles)}")
         start = time.time()
         num_cores = cpu_count()
-        outputs = Parallel(n_jobs=num_cores, verbose=1)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o, p, q) for \
+        outputs = Parallel(n_jobs=num_cores, verbose=0)(delayed(runFilterOnFastq)(i, j, k, l, m, n, o, p, q) for \
                                                         i, j, k, l, m, n, o, p, q  in inputs)
         end = time.time()
-        chromTime += end-start
+        chromTime = end-start
         totalTime += chromTime
-
-        print(f"Completed {chrom}\t", end)
-        print(f"{chrom} time (s):\t", chromTime)
+        if verbose:
+            print(f"Completed {chrom}\t")
+            print(f"{chrom} time (s):\t", chromTime)
 
         for tpr, fpr in outputs:
             truePos, regionTotPos = tpr.split(":")

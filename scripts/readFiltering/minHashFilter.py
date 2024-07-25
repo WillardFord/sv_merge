@@ -67,14 +67,23 @@ class minHashFilter(Filter):
     Build hashes from random inputs
     """
     def buildHashes(self):
+        """
+        Function to return hash functions to avoid 'late binding' error
+            https://stackoverflow.com/questions/3431676/creating-functions-or-lambdas-in-a-loop-or-comprehension
+        """
+        def make_f(a, b, large_prime, num_buckets):
+            def f(x):
+                return ((a * x + b) % large_prime) % num_buckets
+            return f
         num_buckets = 10000
         large_prime = self.hashes[2]
         numHashes = len(self.hashes[0])
-        hash_functions = [0 for _ in range(numHashes)]
+        hash_functions = []
         for i in range(numHashes):
             a = self.hashes[0][i]
             b = self.hashes[1][i]
-            hash_functions[i] = lambda x: ((a * x + b) % large_prime) % num_buckets
+            hash_function = make_f(a, b, large_prime, num_buckets)
+            hash_functions.append(hash_function)
         self.hashes = hash_functions
 
 def main():

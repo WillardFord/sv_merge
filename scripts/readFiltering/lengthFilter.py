@@ -57,7 +57,7 @@ class lengthFilter(Filter):
 def main():
     saveFig, param, test = readInputs()
     filter:lengthFilter = lengthFilter(param)
-    runFilter(filter, saveFig, test)
+    runFilter(filter, saveFig, test, verbose = False)
 
 if __name__ == "__main__":
     main()

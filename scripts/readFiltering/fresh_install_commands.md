@@ -107,11 +107,13 @@ Requires a few python packages in a new environment.
 conda install numpy, matplotlib, joblib
 
 # Few minutes each
-python generateROC.py euclidean
+python generateROC.py euclidean # Saves many different bin sizes
 python generateROC.py sketch
 
 # Whole day of compute. Python functions struggle to parallelize. Basically lose all optimization on this front
 python generateROC.py minHash
+
+python generateROC.py lengthTest # Run a wide range of different length parameters and prints to std out the results.
 
 ```
 
