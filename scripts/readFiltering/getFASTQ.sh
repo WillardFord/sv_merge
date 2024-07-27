@@ -17,7 +17,7 @@ do
             --bam $BAM \
             --bed $BED \
             --output_dir $OUTPUTDIR \
-            --flank_length 200 \
+            --flank_length 20 \
             --n_threads 1 \
             --require_spanning \
             --tags PS,HP \

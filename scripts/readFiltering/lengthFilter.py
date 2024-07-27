@@ -42,13 +42,23 @@ class lengthFilter(Filter):
                 if i == j:
                     self.adjacencyMatrix[i,j] = 1
                 else:
-                    self.adjacencyMatrix[i,j] = self.connect(i,j)
+                    self.adjacencyMatrix[i,j] = self.run_connect(i,j)
         return self.adjacencyMatrix
 
+    """
+    Conect Edges
+    """
+    def run_connect(self, i, j):
+        distance = abs(len(self.seqs[i]) - len(self.seqs[j]))
+        if self.percent: 
+            return  distance <= self.maxLength * self.threshold
+        return distance <= self.threshold
+
     '''
-    Connect elements with dif(lengths) <= self.threshold.
+    Legacy function from first implementation. Can probably remove this from every single filter but will do later.
     '''
     def connect(self, i, j):
+        return self.adjacencyMatrix[i,j]
         distance = abs(len(self.seqs[i]) - len(self.seqs[j]))
         if self.percent: 
             return  distance <= self.maxLength * self.threshold

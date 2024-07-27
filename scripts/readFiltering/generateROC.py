@@ -97,21 +97,28 @@ For both absolute length and percentage length.
 """
 def rocLengthTest():
     # Absolute Difference
-    for i in range(88, 500):
+    for i in range(50, 501, 50):
         inputParams =  f"{i},0"
+        output_dir = os.path.join("../../output/signatureMtxs_20bp/length", inputParams)
+        os.mkdir(output_dir)
+
         print("Absolute Dif", inputParams)
         localFilter = lengthFilter(inputParams)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False)
+        truePos, allPos, falsePos, allNeg = runFilter(localFilter, inplace = output_dir, verbose = False)
         print(f"{truePos}:{allPos}\t{falsePos}:{allNeg}")
         if truePos == allPos:
             break
 
     # Percentage of size based difference
-    for i in np.arange(0, 100, 1/5):
-        inputParams =  f"{i},i"
+    for i in np.arange(0, 21, 5):
+        inputParams =  f"{i},1"
+
+        output_dir = os.path.join("../../output/signatureMtxs_20bp/length", inputParams)
+        os.mkdir(output_dir)
+
         print("Percentage Dif", inputParams)
         localFilter = lengthFilter(inputParams)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False)
+        truePos, allPos, falsePos, allNeg = runFilter(localFilter, inplace = output_dir, verbose = False)
         print(f"{truePos}:{allPos}\t{falsePos}:{allNeg}")
         if truePos == allPos:
             break
@@ -122,7 +129,7 @@ Geneate the characteristic matricies of euclideanFilter
 def rocEuclidean():
     characteristicDirectory = "../../output/signatureMtxs_20bp/euclidean"
     # Test a range of bin sizes for assigning projected values
-    for i in range(1,100):
+    for i in range(1,20):
         inputParams =  f"1000,21,{i},1"
         outputDirectory = os.path.join(characteristicDirectory,inputParams)
 
