@@ -129,17 +129,17 @@ Geneate the characteristic matricies of euclideanFilter
 def rocEuclidean():
     characteristicDirectory = "../../output/signatureMtxs_20bp/euclidean"
     # Test a range of bin sizes for assigning projected values
-    for i in range(1,20):
-        inputParams =  f"1000,21,{i},1"
-        outputDirectory = os.path.join(characteristicDirectory,inputParams)
+    #for i in range(1,20):
+    inputParams =  f"1000,11,1,1"
+    outputDirectory = os.path.join(characteristicDirectory,inputParams)
 
-        if os.path.isdir(outputDirectory):
-            print(f"Path already exists\t{outputDirectory}")
-            continue
+    if os.path.isdir(outputDirectory):
+        print(f"Path already exists\t{outputDirectory}")
+        return #continue
 
-        os.makedirs(outputDirectory, exist_ok=True)
-        localFilter = euclideanFilter(inputParams)
-        truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False, inplace = outputDirectory, loadEuclidean = True)
+    os.makedirs(outputDirectory, exist_ok=True)
+    localFilter = euclideanFilter(inputParams)
+    truePos, allPos, falsePos, allNeg = runFilter(localFilter, verbose = False, inplace = outputDirectory, loadEuclidean = True)
 
 """
 Geneate the characteristic matricies of sketchFilter
@@ -147,7 +147,7 @@ Geneate the characteristic matricies of sketchFilter
 def rocSketch():
     characteristicDirectory = "../../output/signatureMtxs_20bp/sketch"
 
-    inputParams =  f"1000,21,1"
+    inputParams =  f"1000,31,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
 
     if os.path.isdir(outputDirectory):

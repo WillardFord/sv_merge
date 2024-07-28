@@ -48,7 +48,9 @@ class Filter(ABC):
             self.firstOcc[i] = self.labels.index(item)
         
         # Min size of characteristic vector upon generation. Will lazily add more space if needed
-        self.minKmerRead = 750
+        # I'm pretty sure only multiples of 375 work because it has to be a power of 2 divisor of M = 24000.
+        # Edge case fix with lazy kmer generation on last size extension but if it ain't broke.
+        self.minKmerRead = 375
 
         # Length of random vector to use. Should be at least as large as largest region.
         self.m = M
@@ -80,9 +82,7 @@ class Filter(ABC):
     def getCharacteristicVector(self, i):
         characteristicVector = np.zeros(self.minKmerRead, dtype=np.int16)
         kmerDir = f"../../output/kmerTables_20bp/{int(self.K)}mers" # convert to int to eliminate any trailing 0s
-        chrom = os.path.basename(self.fastqFile).split("_")[0]
-        regionDir = os.path.join(kmerDir, chrom, os.path.basename(self.fastqFile)[:-6])
-        tableFile = os.path.join(regionDir, f"read{i+1}.ktab") # Files are 1-indexed
+        tableFile = os.path.join(kmerDir, "all_chr", os.path.basename(self.fastqFile)[:-6], f"read{i+1}.ktab")
 
         # Some regions are too small, don't have haplotypes, or too few reads and led to errors. So table doesn't exist
         if not os.path.isfile(tableFile):
@@ -113,7 +113,6 @@ class Filter(ABC):
                 characteristicVector = np.concatenate((characteristicVector, np.zeros(addValue)), axis=0)
                 self.minKmerRead *= 2
             characteristicVector[localIndex] = count
-
         return characteristicVector
 
     """
