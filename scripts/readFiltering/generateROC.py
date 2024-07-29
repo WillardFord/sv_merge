@@ -130,7 +130,7 @@ def rocEuclidean():
     characteristicDirectory = "../../output/signatureMtxs_20bp/euclidean"
     # Test a range of bin sizes for assigning projected values
     #for i in range(1,20):
-    inputParams =  f"1000,11,1,1"
+    inputParams =  f"1000,5,1,1"
     outputDirectory = os.path.join(characteristicDirectory,inputParams)
 
     if os.path.isdir(outputDirectory):

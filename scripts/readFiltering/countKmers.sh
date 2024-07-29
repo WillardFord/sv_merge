@@ -6,7 +6,7 @@
 WD=../../output
 DIR="$WD"/splitFastqs/HG002_20bp
 
-K="31"
+K="3"
 
 count_kmers() {
     local index="$1"
